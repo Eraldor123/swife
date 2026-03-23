@@ -9,23 +9,18 @@ const LoginPage: React.FC = () => {
     const [pin, setPin] = useState<string>('');
     const [error, setError] = useState<string>('');
 
-    // Nyní si vytáhneme z kontextu i userRole
-    const { isAuthenticated, isLoading, login, userRole } = useAuth();
+    const { isAuthenticated, isLoading, login, userRoles } = useAuth();
     const navigate = useNavigate();
 
-    // 1. SCÉNÁŘ: Automatické přesměrování ověřeného uživatele (po F5 nebo otevření indexu)
     useEffect(() => {
-        if (isAuthenticated) {
-            // Rozhodujeme se podle role
-            switch (userRole) {
-                case 'TERMINAL':
-                    navigate('/terminal');
-                    break;
-                default:
-                    navigate('/dashboard');
+        if (isAuthenticated && userRoles) {
+            if (userRoles.includes('TERMINAL')) {
+                navigate('/terminal');
+            } else {
+                navigate('/dashboard');
             }
         }
-    }, [isAuthenticated, userRole, navigate]);
+    }, [isAuthenticated, userRoles, navigate]);
 
     const handleLogin = async (e: React.FormEvent<HTMLFormElement>) => {
         e.preventDefault();
@@ -39,16 +34,15 @@ const LoginPage: React.FC = () => {
             });
 
             if (response.ok) {
-                const data = await response.json(); // data obsahuje token, email, userId a roli
+                const data = await response.json();
 
-                // 2. SCÉNÁŘ: Uložíme do kontextu včetně role získané z backendu
-                login(data.token, data.email, data.role);
+                // ZMĚNA: Přijímáme pole z data.roles
+                login(data.token, data.email, data.roles);
 
-                // Bezprostřední přesměrování po kliknutí na "Přihlásit"
-                if (data.role === 'TERMINAL') {
+                if (data.roles && data.roles.includes('TERMINAL')) {
                     navigate('/terminal');
                 } else {
-                    navigate('/welcome');
+                    navigate('/dashboard');
                 }
             } else {
                 setError('Neplatný email nebo heslo (PIN).');
