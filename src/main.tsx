@@ -1,13 +1,11 @@
 import React from 'react'
 import ReactDOM from 'react-dom/client'
-import App from './App.tsx'
-import { BrowserRouter } from 'react-router-dom' // Přidat toto
-import './index.css'
+import App from './App'
+import { CssBaseline } from '@mui/material'
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
     <React.StrictMode>
-        <BrowserRouter>
-            <App />
-        </BrowserRouter>
+        <CssBaseline />
+        <App />
     </React.StrictMode>,
 )

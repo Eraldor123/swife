@@ -1,82 +1,79 @@
-import { useState, useEffect } from 'react'
-import { Routes, Route, Link } from 'react-router-dom'
-import reactLogo from './assets/react.svg'
-import viteLogo from '/vite.svg'
-import './App.css'
-import UserList from './components/UserList'
+import React, { type JSX } from 'react';
+import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import LoginPage from './pages/LoginPage';
+import WelcomePage from './pages/WelcomePage';
+import TerminalKiosk from './pages/TerminalKiosk';
+import DashboardLayout from './layouts/DashboardLayout'; // Nezapomeň mít tento soubor vytvořený
+import AdminUsersDashboard from './pages/AdminUsersDashboard'; // Nezapomeň vytvořit
+import AdminShiftsDashboard from './pages/AdminShiftsDashboard'; // Nezapomeň vytvořit
+import UserRegistrationPage from './pages/UserRegistrationPage';
+import { AuthProvider, useAuth } from './context/AuthContext';
 
-function App() {
+// Upravená komponenta ProtectedRoute, která teď umí hlídat i role
+const ProtectedRoute = ({ children, allowedRoles }: { children: JSX.Element, allowedRoles?: string[] }) => {
+    const { isAuthenticated, isLoading, userRole } = useAuth();
 
-    const [count, setCount] = useState(0)
-    const [backendMessage, setBackendMessage] = useState('Načítám data z backendu...')
+    if (isLoading) return null; // Zde může být nějaký globální spinner
 
-    useEffect(() => {
-        fetch('http://localhost:8080/api/test')
-            .then((response) => {
-                if (!response.ok) {
-                    throw new Error('Network response was not ok');
-                }
-                return response.text();
-            })
-            .then((data) => {
-                setBackendMessage(data);
-            })
-            .catch((error) => {
-                console.error('Došlo k chybě:', error);
-                setBackendMessage('Chyba: Nepodařilo se připojit k backendu.');
-            });
-    }, []);
+    // Není přihlášen -> zpět na login
+    if (!isAuthenticated) return <Navigate to="/" replace />;
 
-    const handleCreateTest = () => {
-        fetch('http://localhost:8080/api/test/users/createtest')
-            .then((response) => {
-                if (!response.ok) {
-                    throw new Error('Network response was not ok');
-                }
-                return response.text();
-            })
-            .then((data) => {
-                alert(data);
-            })
-            .catch((error) => {
-                console.error('Došlo k chybě:', error);
-                alert('Chyba: ' + error.message);
-            });
-    };
+    // Je přihlášen, ale zkoušíme omezit role a on tu požadovanou nemá -> hodíme ho jinam
+    if (allowedRoles && userRole && !allowedRoles.includes(userRole)) {
+        return <Navigate to="/welcome" replace />; // Zatím ho hodíme na welcome, pokud nemá práva
+    }
 
+    return children;
+};
+
+const App: React.FC = () => {
     return (
-        <>
-            {/* Jednoduchá navigace, abyste se mezi stránkami mohli přepínat */}
-            <nav style={{ marginBottom: '2rem', display: 'flex', gap: '1rem', justifyContent: 'center' }}>
-                <Link to="/">Domů</Link>
-                <Link to="/users">Seznam uživatelů</Link>
-            </nav>
+        <AuthProvider>
+            <Router>
+                <Routes>
+                    <Route path="/" element={<LoginPage />} />
 
-            <Routes>
-                {/* HLAVNÍ STRÁNKA */}
-                <Route path="/" element={
-                    <>
-                        <div>
-                            <a href="https://vite.dev" target="_blank"><img src={viteLogo} className="logo" alt="Vite logo" /></a>
-                            <a href="https://react.dev" target="_blank"><img src={reactLogo} className="logo react" alt="React logo" /></a>
-                        </div>
-                        <h1>Vite + React</h1>
-                        <div className="card">
-                            <h2>Odpověď z backendu:</h2>
-                            <p style={{ fontWeight: 'bold', color: '#646cff' }}>{backendMessage}</p>
-                        </div>
-                        <div className="card">
-                            <button onClick={() => setCount((count) => count + 1)}>count is {count}</button>
-                            <button onClick={handleCreateTest} style={{ marginLeft: '1rem' }}>Vytvořit test</button>
-                        </div>
-                    </>
-                } />
+                    <Route
+                        path="/welcome"
+                        element={
+                            <ProtectedRoute>
+                                <WelcomePage />
+                            </ProtectedRoute>
+                        }
+                    />
 
-                {/* NOVÁ STRÁNKA S TABULKOU */}
-                <Route path="/users" element={<UserList />} />
-            </Routes>
-        </>
-    )
-}
+                    {/* Terminál omezíme jen pro roli TERMINAL */}
+                    <Route
+                        path="/terminal"
+                        element={
+                            <ProtectedRoute allowedRoles={['TERMINAL']}>
+                                <TerminalKiosk />
+                            </ProtectedRoute>
+                        }
+                    />
 
-export default App
+                    {/* NOVÝ HLAVNÍ DASHBOARD LAYOUT */}
+                    <Route
+                        path="/dashboard"
+                        element={
+                            <ProtectedRoute>
+                                <DashboardLayout />
+                            </ProtectedRoute>
+                        }
+                    >
+                        {/* Když uživatel zadá jen /dashboard, rovnou ho to hodí na uživatele */}
+                        <Route index element={<Navigate to="/dashboard/users" replace />} />
+
+                        {/* Vnořené stránky, které se vykreslí místo <Outlet /> v layoutu */}
+                        <Route path="users" element={<AdminUsersDashboard />} />
+                        <Route path="shifts" element={<AdminShiftsDashboard />} />
+                        <Route path="users/register" element={<UserRegistrationPage />} />
+                    </Route>
+
+                </Routes>
+            </Router>
+        </AuthProvider>
+    );
+};
+
+export default App;
