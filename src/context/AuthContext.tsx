@@ -4,8 +4,10 @@ interface AuthContextType {
     isAuthenticated: boolean;
     isLoading: boolean;
     userEmail: string | null;
+    userId: string | null; // NOVÉ
     userRoles: string[];
-    login: (token: string, email: string, roles: string[]) => void;
+    // NOVÉ: Přidáno userId do parametrů
+    login: (token: string, email: string, roles: string[], userId: string) => void;
     logout: () => void;
 }
 
@@ -15,12 +17,14 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
     const [isLoading, setIsLoading] = useState<boolean>(true);
     const [userEmail, setUserEmail] = useState<string | null>(null);
+    const [userId, setUserId] = useState<string | null>(null); // NOVÉ
     const [userRoles, setUserRoles] = useState<string[]>([]);
 
     useEffect(() => {
         const verifyToken = async () => {
             const token = localStorage.getItem('token');
             const email = localStorage.getItem('userEmail');
+            const id = localStorage.getItem('userId'); // NOVÉ
             const rolesString = localStorage.getItem('userRoles');
             const roles = rolesString ? JSON.parse(rolesString) : [];
 
@@ -38,6 +42,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 if (response.ok) {
                     setIsAuthenticated(true);
                     setUserEmail(email);
+                    setUserId(id); // NOVÉ
                     setUserRoles(roles);
                 } else {
                     logout();
@@ -49,36 +54,38 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             }
         };
 
-        // OPRAVA: Přidáno klíčové slovo "void" pro uklidnění ESLintu
         void verifyToken();
     }, []);
 
-    const login = (token: string, email: string, roles: string[]) => {
+    const login = (token: string, email: string, roles: string[], id: string) => {
         localStorage.setItem('token', token);
         localStorage.setItem('userEmail', email);
+        localStorage.setItem('userId', id); // NOVÉ
         localStorage.setItem('userRoles', JSON.stringify(roles));
         setIsAuthenticated(true);
         setUserEmail(email);
+        setUserId(id); // NOVÉ
         setUserRoles(roles);
     };
 
     const logout = () => {
         localStorage.removeItem('token');
         localStorage.removeItem('userEmail');
+        localStorage.removeItem('userId'); // NOVÉ
         localStorage.removeItem('userRoles');
         setIsAuthenticated(false);
         setUserEmail(null);
+        setUserId(null); // NOVÉ
         setUserRoles([]);
     };
 
     return (
-        <AuthContext.Provider value={{ isAuthenticated, isLoading, userEmail, userRoles, login, logout }}>
+        <AuthContext.Provider value={{ isAuthenticated, isLoading, userEmail, userId, userRoles, login, logout }}>
             {children}
         </AuthContext.Provider>
     );
 };
 
-// OPRAVA: Tento komentář vypne přísné pravidlo Vite pouze pro následující řádek
 // eslint-disable-next-line react-refresh/only-export-components
 export const useAuth = () => {
     const context = useContext(AuthContext);

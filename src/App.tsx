@@ -7,17 +7,17 @@ import DashboardLayout from './layouts/DashboardLayout';
 import AdminUsersDashboard from './pages/AdminUsersDashboard';
 import AdminShiftsDashboard from './pages/AdminShiftsDashboard';
 import UserRegistrationPage from './pages/UserRegistrationPage';
+import PositionsSettingsPage from './pages/PositionsSettingsPage';
+import AvailabilityCalendarPage from './pages/AvailabilityCalendarPage';
 import { AuthProvider, useAuth } from './context/AuthContext';
 
-// OPRAVA: Tady jsme změnili allowedRole (text) na allowedRoles (pole)
 const ProtectedRoute = ({ children, allowedRoles }: { children: JSX.Element, allowedRoles?: string[] }) => {
     const { isAuthenticated, isLoading, userRoles } = useAuth();
 
     if (isLoading) return null;
     if (!isAuthenticated) return <Navigate to="/" replace />;
 
-    // Bezpečná kontrola pro pole rolí
-    if (allowedRoles && Array.isArray(userRoles) && userRoles.length > 0) {
+    if (allowedRoles && userRoles && userRoles.length > 0) {
         const hasRequiredRole = userRoles.some(role => allowedRoles.includes(role));
         if (!hasRequiredRole) {
             return <Navigate to="/dashboard" replace />;
@@ -32,23 +32,33 @@ const App: React.FC = () => {
         <AuthProvider>
             <Router>
                 <Routes>
+                    {/* Veřejné cesty */}
                     <Route path="/" element={<LoginPage />} />
-                    <Route path="/welcome" element={<ProtectedRoute><WelcomePage /></ProtectedRoute>} />
 
-                    {/* Předáváme pole s jednou rolí TERMINAL */}
+                    {/* Cesty vyžadující přihlášení, ale mimo hlavní dashboard */}
+                    <Route path="/welcome" element={<ProtectedRoute><WelcomePage /></ProtectedRoute>} />
                     <Route path="/terminal" element={<ProtectedRoute allowedRoles={['TERMINAL']}><TerminalKiosk /></ProtectedRoute>} />
 
+                    {/* HLAVNÍ DASHBOARD (Všechny pod-cesty se píšou bez úvodního lomítka) */}
                     <Route path="/dashboard" element={<ProtectedRoute><DashboardLayout /></ProtectedRoute>} >
                         <Route index element={<Navigate to="/dashboard/users" replace />} />
+
                         <Route path="users" element={<AdminUsersDashboard />} />
 
-                        {/* Předáváme pole pro ADMIN a MANAGEMENT */}
                         <Route path="users/register" element={
                             <ProtectedRoute allowedRoles={['ADMIN', 'MANAGEMENT']}><UserRegistrationPage /></ProtectedRoute>
                         } />
 
+                        {/* OPRAVA: Cesta bez / na začátku, aby zůstala uvnitř Dashboardu */}
+                        <Route path="settings/positions" element={<PositionsSettingsPage />} />
+
                         <Route path="shifts" element={<AdminShiftsDashboard />} />
+
+                        <Route path="calendar" element={<AvailabilityCalendarPage />} />
                     </Route>
+
+                    {/* Ochrana proti neexistujícím adresám */}
+                    <Route path="*" element={<Navigate to="/" replace />} />
                 </Routes>
             </Router>
         </AuthProvider>

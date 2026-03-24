@@ -37,7 +37,7 @@ const LoginPage: React.FC = () => {
                 const data = await response.json();
 
                 // ZMĚNA: Přijímáme pole z data.roles
-                login(data.token, data.email, data.roles);
+                login(data.token, data.email, data.roles, data.userId);
 
                 if (data.roles && data.roles.includes('TERMINAL')) {
                     navigate('/terminal');

@@ -11,8 +11,11 @@ const AdminShiftsDashboard: React.FC = () => {
 
             <Box sx={{ display: 'flex', gap: 3, flexWrap: 'wrap', ml: 2 }}>
                 <MenuCard title="Směnář / generování směn" navigateTo="/dashboard/shifts/generator" />
-                <MenuCard title="Nastavení pozic" navigateTo="/dashboard/shifts/stations" />
-                <MenuCard title="Moje směny / moje dostupnost" navigateTo="/dashboard/shifts/my-shifts" />
+                <MenuCard title="Nastavení pozic" navigateTo="/dashboard/settings/positions" />
+
+                {/* OPRAVENÁ CESTA NA KALENDÁŘ */}
+                <MenuCard title="Moje směny / moje dostupnost" navigateTo="/dashboard/calendar" />
+
                 <MenuCard title="Výkazy a reporty" navigateTo="/dashboard/shifts/reports" />
                 <MenuCard title="Kvalifikace zaměstnanců" navigateTo="/dashboard/shifts/qualifications" />
                 <MenuCard title="Žádosti / Neobvyklé směny" navigateTo="/dashboard/shifts/requests" />
