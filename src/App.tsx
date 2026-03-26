@@ -10,6 +10,7 @@ import UserRegistrationPage from './pages/UserRegistrationPage';
 import PositionsSettingsPage from './pages/PositionsSettingsPage';
 import AvailabilityCalendarPage from './pages/AvailabilityCalendarPage';
 import { AuthProvider, useAuth } from './context/AuthContext';
+import EmployeeQualificationsPage from './pages/EmployeeQualificationsPage'; // Uprav cestu podle sebe
 
 const ProtectedRoute = ({ children, allowedRoles }: { children: JSX.Element, allowedRoles?: string[] }) => {
     const { isAuthenticated, isLoading, userRoles } = useAuth();
@@ -49,10 +50,12 @@ const App: React.FC = () => {
                             <ProtectedRoute allowedRoles={['ADMIN', 'MANAGEMENT']}><UserRegistrationPage /></ProtectedRoute>
                         } />
 
-                        {/* OPRAVA: Cesta bez / na začátku, aby zůstala uvnitř Dashboardu */}
                         <Route path="settings/positions" element={<PositionsSettingsPage />} />
 
                         <Route path="shifts" element={<AdminShiftsDashboard />} />
+
+                        {/* OPRAVENO: Bez úvodního lomítka a sjednoceno s tlačítkem */}
+                        <Route path="shifts/qualifications" element={<EmployeeQualificationsPage />} />
 
                         <Route path="calendar" element={<AvailabilityCalendarPage />} />
                     </Route>
