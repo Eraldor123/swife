@@ -10,7 +10,10 @@ import UserRegistrationPage from './pages/UserRegistrationPage';
 import PositionsSettingsPage from './pages/PositionsSettingsPage';
 import AvailabilityCalendarPage from './pages/AvailabilityCalendarPage';
 import { AuthProvider, useAuth } from './context/AuthContext';
-import EmployeeQualificationsPage from './pages/EmployeeQualificationsPage'; // Uprav cestu podle sebe
+import EmployeeQualificationsPage from './pages/EmployeeQualificationsPage';
+
+// 1. PŘIDÁNO: Import nového Směnáře
+import ShiftPlanner from './pages/ShiftPlanner/ShiftPlanner';
 
 const ProtectedRoute = ({ children, allowedRoles }: { children: JSX.Element, allowedRoles?: string[] }) => {
     const { isAuthenticated, isLoading, userRoles } = useAuth();
@@ -54,7 +57,9 @@ const App: React.FC = () => {
 
                         <Route path="shifts" element={<AdminShiftsDashboard />} />
 
-                        {/* OPRAVENO: Bez úvodního lomítka a sjednoceno s tlačítkem */}
+                        {/* 2. PŘIDÁNO: Propojení tlačítka s novým Směnářem */}
+                        <Route path="shifts/generator" element={<ShiftPlanner />} />
+
                         <Route path="shifts/qualifications" element={<EmployeeQualificationsPage />} />
 
                         <Route path="calendar" element={<AvailabilityCalendarPage />} />
