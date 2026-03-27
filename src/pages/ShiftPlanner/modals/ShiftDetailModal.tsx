@@ -15,25 +15,41 @@ interface Props {
     onClose: () => void;
     shift: ScheduleShift | null;
     onRemoveUser: (shiftId: string, userId: string) => void;
-    onUpdateShift: (shiftId: string, startTime: string, endTime: string, capacity: number) => void;
+    onUpdateShift: (shiftId: string, startTime: string, endTime: string, capacity: number, description?: string) => void;
+    onSplitShift: (shiftId: string) => void;
+    onDeleteShift: (shiftId: string) => void; // <--- PŘIDÁNO
 }
 
-const ShiftDetailModal: React.FC<Props> = ({ open, onClose, shift, onRemoveUser, onUpdateShift }) => {
+const ShiftDetailModal: React.FC<Props> = ({
+                                               open,
+                                               onClose,
+                                               shift,
+                                               onRemoveUser,
+                                               onUpdateShift,
+                                               onSplitShift,
+                                               onDeleteShift // <--- PŘIDÁNO
+                                           }) => {
     const [isEditing, setIsEditing] = useState(false);
 
-    // Inicializujeme stav přímo z props (díky 'key' v ShiftPlanneru se to samo resetuje)
     const [startTime, setStartTime] = useState(shift?.startTime.substring(11, 16) || '');
     const [endTime, setEndTime] = useState(shift?.endTime.substring(11, 16) || '');
     const [capacity, setCapacity] = useState<number>(shift?.requiredCapacity || 1);
+    const [description, setDescription] = useState<string>(shift?.description || '');
 
     if (!shift) return null;
 
-    const handleSave = () => {
-        const datePart = shift.startTime.substring(0, 11);
-        const newStart = `${datePart}${startTime}:00`;
-        const newEnd = `${datePart}${endTime}:00`;
+    const startHour = parseInt(shift.startTime.substring(11, 13), 10);
+    const endHour = parseInt(shift.endTime.substring(11, 13), 10);
+    const isFullDay = startHour < 12 && endHour >= 15;
 
-        onUpdateShift(shift.id, newStart, newEnd, capacity);
+    const handleSave = () => {
+        const startDatePart = shift.startTime.substring(0, 11);
+        const endDatePart = shift.endTime.substring(0, 11);
+
+        const newStart = `${startDatePart}${startTime}:00`;
+        const newEnd = `${endDatePart}${endTime}:00`;
+
+        onUpdateShift(shift.id, newStart, newEnd, capacity, description.trim() !== '' ? description.trim() : undefined);
         setIsEditing(false);
     };
 
@@ -82,9 +98,25 @@ const ShiftDetailModal: React.FC<Props> = ({ open, onClose, shift, onRemoveUser,
                             fullWidth
                             size="small"
                         />
+                        <TextField
+                            label="Popisek směny"
+                            value={description}
+                            onChange={(e) => setDescription(e.target.value)}
+                            fullWidth
+                            size="small"
+                            placeholder="Např. Školní výlet"
+                        />
                     </Box>
                 ) : (
                     <>
+                        {shift.description && (
+                            <Box sx={{ px: 3, py: 1.5, bgcolor: '#fff3e0', borderBottom: '1px solid #ffe0b2' }}>
+                                <Typography variant="body2" sx={{ color: '#e65100', fontWeight: 'bold' }}>
+                                    📝 {shift.description}
+                                </Typography>
+                            </Box>
+                        )}
+
                         <Box sx={{ px: 3, py: 2, bgcolor: '#e3f2fd', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                             <Typography variant="body2" sx={{ fontWeight: 'bold', color: '#1976d2' }}>
                                 Obsazenost
@@ -128,12 +160,47 @@ const ShiftDetailModal: React.FC<Props> = ({ open, onClose, shift, onRemoveUser,
                 {isEditing ? (
                     <>
                         <Button startIcon={<CloseIcon />} onClick={() => setIsEditing(false)} color="inherit" sx={{ textTransform: 'none' }}>Zrušit</Button>
-                        <Button startIcon={<SaveIcon />} onClick={handleSave} variant="contained" color="primary" sx={{ borderRadius: '10px', textTransform: 'none', px: 3 }}>Uložit změny</Button>
+                        <Box sx={{ display: 'flex', gap: 1 }}>
+                            {isFullDay && (
+                                <Button
+                                    onClick={() => onSplitShift(shift.id)}
+                                    variant="outlined"
+                                    color="warning"
+                                    sx={{ borderRadius: '10px', textTransform: 'none' }}
+                                >
+                                    Rozdělit
+                                </Button>
+                            )}
+                            <Button startIcon={<SaveIcon />} onClick={handleSave} variant="contained" color="primary" sx={{ borderRadius: '10px', textTransform: 'none', px: 3 }}>Uložit</Button>
+                        </Box>
                     </>
                 ) : (
                     <>
-                        <Button startIcon={<EditIcon />} onClick={() => setIsEditing(true)} sx={{ color: '#1976d2', textTransform: 'none', fontWeight: 'bold' }}>Upravit směnu</Button>
-                        <Button onClick={onClose} variant="contained" sx={{ bgcolor: '#3e3535', borderRadius: '10px', textTransform: 'none', '&:hover': { bgcolor: '#000' } }}>Zavřít</Button>
+                        <Box sx={{ display: 'flex', gap: 0.5 }}>
+                            {/* TLAČÍTKO PRO SMAZÁNÍ SMĚNY */}
+                            <Button
+                                startIcon={<DeleteIcon />}
+                                onClick={() => onDeleteShift(shift.id)}
+                                color="error"
+                                sx={{ textTransform: 'none', fontWeight: 'bold' }}
+                            >
+                                Smazat
+                            </Button>
+                            <Button
+                                startIcon={<EditIcon />}
+                                onClick={() => setIsEditing(true)}
+                                sx={{ color: '#1976d2', textTransform: 'none', fontWeight: 'bold' }}
+                            >
+                                Upravit
+                            </Button>
+                        </Box>
+                        <Button
+                            onClick={onClose}
+                            variant="contained"
+                            sx={{ bgcolor: '#3e3535', borderRadius: '10px', textTransform: 'none', '&:hover': { bgcolor: '#000' } }}
+                        >
+                            Zavřít
+                        </Button>
                     </>
                 )}
             </DialogActions>

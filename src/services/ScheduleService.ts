@@ -56,10 +56,39 @@ export const ScheduleService = {
         });
     },
     // Tato metoda chybí a způsobuje tu chybu v ShiftPlanneru
-    updateShift: async (shiftId: string, data: { startTime: string, endTime: string, requiredCapacity: number }): Promise<void> => {
+    updateShift: async (shiftId: string, data: { startTime: string; endTime: string; requiredCapacity: number; description?: string }): Promise<void> => {
         const token = localStorage.getItem('token');
         await axios.put(`http://localhost:8080/api/v1/shifts/${shiftId}`, data, {
             headers: { 'Authorization': `Bearer ${token}` }
         });
     },
+    // ... tvoje předchozí metody, např. updateShift ...
+
+    splitShift: async (shiftId: string): Promise<void> => {
+        const token = localStorage.getItem('token');
+        await axios.post(`http://localhost:8080/api/v1/shifts/${shiftId}/split`, {}, {
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+    },
+    generateCustomShifts: async (data: {
+        stationId: number; startDate: string; endDate: string;
+        startTime?: string; endTime?: string; requiredCapacity: number;
+        useOpeningHours?: boolean; hasDopo?: boolean; hasOdpo?: boolean;
+        description?: string; // <--- NOVÉ
+    }): Promise<void> => {
+        const token = localStorage.getItem('token');
+        await axios.post(`http://localhost:8080/api/v1/shift-generation/custom`, data, {
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+    },
+    // src/services/ScheduleService.ts
+    async deleteShift(shiftId: string): Promise<void> {
+        const token = localStorage.getItem('token');
+        await fetch(`http://localhost:8080/api/v1/shifts/${shiftId}`, {
+            method: 'DELETE',
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+    }
+
+    // ... další metody, pokud tam nějaké jsou ...
 };

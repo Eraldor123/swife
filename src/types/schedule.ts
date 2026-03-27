@@ -26,11 +26,12 @@ export interface AssignedUser {
 export interface ScheduleShift {
     id: string;
     stationId: number;
-    templateId: number | null;
+    templateId?: number;
     shiftDate: string;
     startTime: string;
     endTime: string;
     requiredCapacity: number;
+    description?: string;
     assignedUsers: AssignedUser[];
 }
 
@@ -68,7 +69,7 @@ export interface HierarchyTemplate {
 export interface HierarchyStation {
     id: number;
     name: string;
-    needsQualification: boolean; // <--- TOTO PŘIDEJ
+    needsQualification: boolean;
     templates: HierarchyTemplate[];
 }
 
@@ -78,6 +79,7 @@ export interface HierarchyStation {
 export interface HierarchyCategory {
     id: number;
     name: string;
+    color: string | null; // <--- DOPLNĚNO, aby fungovalo podbarvení
     stations: HierarchyStation[];
 }
 

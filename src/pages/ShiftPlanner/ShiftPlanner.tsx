@@ -1,3 +1,5 @@
+// src/components/shifts/Planner/ShiftPlanner.tsx
+
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import {
     Box, Typography, CircularProgress, Button,
@@ -9,7 +11,6 @@ import { ArrowBack, ArrowBackIos, ArrowForwardIos } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
 import { ScheduleService } from '../../services/ScheduleService';
 
-// Import typů
 import type { WeeklyScheduleResponse, PlannerUser, HierarchyData, ScheduleShift } from '../../types/schedule';
 
 import PlannerSidebar from './PlannerSidebar';
@@ -18,7 +19,6 @@ import CopyWeekModal, { type CopyFormValues } from './modals/CopyWeekModal';
 import GenerateShiftsModal, { type GenerateFormValues } from './modals/GenerateShiftsModal';
 import ShiftDetailModal from './modals/ShiftDetailModal';
 
-// Pomocná funkce pro bezpečné formátování lokálního data
 const formatDateLocal = (d: Date) => {
     const year = d.getFullYear();
     const month = String(d.getMonth() + 1).padStart(2, '0');
@@ -49,19 +49,16 @@ const addWeeks = (dateStr: string, weeks: number) => {
 export const ShiftPlanner = () => {
     const navigate = useNavigate();
 
-    // FILTRY A NAVIGACE
     const [viewMode, setViewMode] = useState<'week' | 'day'>('week');
     const [selectedCategory, setSelectedCategory] = useState<number | 'all'>('all');
     const [currentWeekStart, setCurrentWeekStart] = useState<string>(getStartOfWeek());
     const endDate = getEndOfWeek(currentWeekStart);
 
-    // DATA
     const [scheduleData, setScheduleData] = useState<WeeklyScheduleResponse | null>(null);
     const [availableUsers, setAvailableUsers] = useState<PlannerUser[]>([]);
     const [hierarchy, setHierarchy] = useState<HierarchyData | null>(null);
     const [isLoading, setIsLoading] = useState<boolean>(true);
 
-    // STAV PRO PŘIŘAZOVÁNÍ A DETAIL
     const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
     const [selectedShiftForDetail, setSelectedShiftForDetail] = useState<ScheduleShift | null>(null);
 
@@ -70,7 +67,6 @@ export const ShiftPlanner = () => {
         return hierarchy.categories.flatMap(cat => cat.stations);
     }, [hierarchy]);
 
-    // STAVY MODÁLŮ
     const [isGenerateModalOpen, setIsGenerateModalOpen] = useState(false);
     const [isCopyModalOpen, setIsCopyModalOpen] = useState(false);
     const [isClearModalOpen, setIsClearModalOpen] = useState(false);
@@ -101,10 +97,52 @@ export const ShiftPlanner = () => {
         void loadData();
     }, [loadData]);
 
-    // HANDLERY
     const handleGenerateConfirm = async (data: GenerateFormValues) => {
         try {
-            await ScheduleService.generateShifts(data.startDate, data.endDate, data.templateId);
+            if (data.mode === 'template' && data.templateId !== undefined) {
+                await ScheduleService.generateShifts(data.startDate, data.endDate, data.templateId);
+            } else if (data.mode === 'custom' && data.stationId !== undefined) {
+                if (data.customShiftType === 'halfDay' && data.customTimeMode === 'exact') {
+                    if (data.hasDopo && data.dopoStartTime && data.dopoEndTime) {
+                        await ScheduleService.generateCustomShifts({
+                            stationId: data.stationId,
+                            startDate: data.startDate,
+                            endDate: data.endDate,
+                            startTime: data.dopoStartTime,
+                            endTime: data.dopoEndTime, // OPRAVENO: Byl tu překlep EndStartTime
+                            requiredCapacity: data.capacity!,
+                            useOpeningHours: false,
+                            description: data.description
+                        });
+                    }
+                    if (data.hasOdpo && data.odpoStartTime && data.odpoEndTime) {
+                        await ScheduleService.generateCustomShifts({
+                            stationId: data.stationId,
+                            startDate: data.startDate,
+                            endDate: data.endDate,
+                            startTime: data.odpoStartTime,
+                            endTime: data.odpoEndTime,
+                            requiredCapacity: data.capacity!,
+                            useOpeningHours: false,
+                            description: data.description
+                        });
+                    }
+                } else {
+                    await ScheduleService.generateCustomShifts({
+                        stationId: data.stationId,
+                        startDate: data.startDate,
+                        endDate: data.endDate,
+                        startTime: data.startTime,
+                        endTime: data.endTime,
+                        requiredCapacity: data.capacity!,
+                        useOpeningHours: data.useOpeningHours,
+                        hasDopo: data.hasDopo,
+                        hasOdpo: data.hasOdpo,
+                        description: data.description
+                    });
+                }
+            }
+
             setIsGenerateModalOpen(false);
             await loadData();
         } catch (error) {
@@ -141,7 +179,6 @@ export const ShiftPlanner = () => {
             await ScheduleService.assignUserToShift(shiftId, selectedUserId);
             await loadData();
         } catch (error: unknown) {
-            // Převedeme na typ, který má response, abychom se vyhnuli 'any'
             const err = error as { response?: { data?: { message?: string } } };
             const errorMsg = err.response?.data?.message || "Nepodařilo se přiřadit uživatele.";
             alert(errorMsg);
@@ -162,15 +199,37 @@ export const ShiftPlanner = () => {
         }
     };
 
-    // NOVÉ: Handler pro aktualizaci parametrů směny (čas, kapacita)
-    const handleUpdateShift = async (shiftId: string, startTime: string, endTime: string, capacity: number) => {
+    const handleUpdateShift = async (shiftId: string, startTime: string, endTime: string, capacity: number, description?: string) => {
         try {
-            await ScheduleService.updateShift(shiftId, { startTime, endTime, requiredCapacity: capacity });
+            await ScheduleService.updateShift(shiftId, { startTime, endTime, requiredCapacity: capacity, description });
             await loadData();
-            setSelectedShiftForDetail(null); // Zavřeme modal po úspěšné aktualizaci
+            setSelectedShiftForDetail(null);
         } catch (error) {
             console.error("Chyba při aktualizaci směny:", error);
             alert("Nepodařilo se uložit změny směny.");
+        }
+    };
+
+    const handleSplitShift = async (shiftId: string) => {
+        try {
+            await ScheduleService.splitShift(shiftId);
+            await loadData();
+            setSelectedShiftForDetail(null);
+        } catch (error) {
+            console.error("Chyba při rozdělování směny:", error);
+            alert("Nepodařilo se rozdělit směnu.");
+        }
+    };
+
+    const handleDeleteShift = async (shiftId: string) => {
+        if (!window.confirm("Opravdu chcete tuto směnu smazat?")) return;
+        try {
+            await ScheduleService.deleteShift(shiftId);
+            await loadData();
+            setSelectedShiftForDetail(null);
+        } catch (error) {
+            console.error("Chyba při mazání směny:", error);
+            alert("Nepodařilo se smazat směnu.");
         }
     };
 
@@ -190,7 +249,12 @@ export const ShiftPlanner = () => {
     }
 
     return (
-        <Box sx={{ display: 'flex', height: '100vh', backgroundColor: '#f2ece4', overflow: 'hidden' }}>
+        <Box sx={{
+            display: 'flex',
+            height: '92vh',
+            backgroundColor: '#f2ece4',
+            overflow: 'hidden'
+        }}>
 
             <PlannerSidebar
                 users={availableUsers}
@@ -200,11 +264,19 @@ export const ShiftPlanner = () => {
                 allStations={allStations}
             />
 
-            <Box sx={{ flexGrow: 1, display: 'flex', flexDirection: 'column', p: 1, overflow: 'hidden' }}>
+            <Box sx={{
+                flexGrow: 1,
+                display: 'flex',
+                flexDirection: 'column',
+                p: 1.5,
+                overflow: 'hidden',
+                height: '92vh'
+            }}>
 
                 <Paper elevation={0} sx={{
                     display: 'flex', flexDirection: 'row', alignItems: 'center', gap: 1.5,
-                    mb: 2, p: 1, bgcolor: 'white', borderRadius: 3, boxShadow: '0 2px 8px rgba(0,0,0,0.05)', whiteSpace: 'nowrap'
+                    mb: 2, p: 1, bgcolor: 'white', borderRadius: 3, boxShadow: '0 2px 8px rgba(0,0,0,0.05)', whiteSpace: 'nowrap',
+                    flexShrink: 0
                 }}>
                     <IconButton onClick={() => navigate('/dashboard/shifts')} size="small" sx={{ border: '1px solid #eee' }}>
                         <ArrowBack sx={{ color: '#3e3535', fontSize: 20 }} />
@@ -257,16 +329,24 @@ export const ShiftPlanner = () => {
                     </Box>
                 </Paper>
 
-                <PlannerGrid
-                    hierarchy={selectedCategory === 'all'
-                        ? hierarchy
-                        : hierarchy ? { categories: hierarchy.categories.filter(c => c.id === selectedCategory) } : null
-                    }
-                    scheduleData={scheduleData}
-                    selectedUserId={selectedUserId}
-                    onAssignUser={handleAssignUser}
-                    onShiftClick={(shift) => setSelectedShiftForDetail(shift)}
-                />
+                <Box sx={{
+                    flexGrow: 1,
+                    position: 'relative',
+                    width: '100%',
+                    minHeight: 0
+                }}>
+                    <PlannerGrid
+                        hierarchy={selectedCategory === 'all'
+                            ? hierarchy
+                            : hierarchy ? { categories: hierarchy.categories.filter(c => c.id === selectedCategory) } : null
+                        }
+                        scheduleData={scheduleData}
+                        users={availableUsers}
+                        selectedUserId={selectedUserId}
+                        onAssignUser={handleAssignUser}
+                        onShiftClick={(shift) => setSelectedShiftForDetail(shift)}
+                    />
+                </Box>
 
                 <GenerateShiftsModal
                     open={isGenerateModalOpen}
@@ -305,16 +385,18 @@ export const ShiftPlanner = () => {
                 </Dialog>
 
                 <ShiftDetailModal
-                    key={selectedShiftForDetail?.id || 'empty'} // <--- TOTO PŘIDEJ
+                    key={selectedShiftForDetail?.id || 'empty'}
                     open={!!selectedShiftForDetail}
                     onClose={() => setSelectedShiftForDetail(null)}
                     shift={selectedShiftForDetail}
                     onRemoveUser={handleRemoveUser}
                     onUpdateShift={handleUpdateShift}
+                    onSplitShift={handleSplitShift}
+                    onDeleteShift={handleDeleteShift} // <--- DOPLNĚNO
                 />
-
             </Box>
         </Box>
     );
 };
+
 export default ShiftPlanner;
