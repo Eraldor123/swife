@@ -1,7 +1,8 @@
 // src/components/shifts/Planner/PlannerGrid.tsx
 
-import React from 'react';
+import React, { useMemo } from 'react'; // PŘIDÁNO: useMemo
 import { Box, Typography, Paper, Tooltip } from '@mui/material';
+import { useAuth } from '../../context/AuthContext';
 import type {
     WeeklyScheduleResponse,
     ScheduleShift,
@@ -39,7 +40,31 @@ const getSurname = (fullName: string) => {
     return parts.length > 1 ? parts[parts.length - 1] : fullName;
 };
 
+const formatTime = (isoString: string) => {
+    if (!isoString) return '';
+    return isoString.substring(11, 16);
+};
+
+const getHour = (isoString: string) => {
+    if (!isoString) return 0;
+    return parseInt(isoString.substring(11, 13), 10);
+};
+
 const PlannerGrid: React.FC<Props> = ({ hierarchy, scheduleData, users, selectedUserId, onAssignUser, onRemoveUser, onShiftClick }) => {
+    const { userRoles, userId: loggedInUserId } = useAuth();
+
+    /**
+     * ROBUSTNÍ KONTROLA ROLÍ:
+     * Očištění rolí pro správné fungování "Plánovače".
+     */
+    const isManagerial = useMemo(() => {
+        const managerialRoles = ['ADMIN', 'PLANNER', 'MANAGEMENT', 'MANAGER'];
+        return userRoles.some((role: string) => {
+            const cleanRole = role.replace('ROLE_', '').toUpperCase();
+            return managerialRoles.includes(cleanRole);
+        });
+    }, [userRoles]);
+
     if (!hierarchy || !scheduleData || !scheduleData.days) return null;
 
     const daysCount = scheduleData.days.length;
@@ -50,8 +75,8 @@ const PlannerGrid: React.FC<Props> = ({ hierarchy, scheduleData, users, selected
         if (stationShifts.length === 0) return null;
         const uniqueCustomRanges = new Set<string>();
         stationShifts.forEach(shift => {
-            const sTime = shift.startTime?.substring(11, 16);
-            const eTime = shift.endTime?.substring(11, 16);
+            const sTime = formatTime(shift.startTime);
+            const eTime = formatTime(shift.endTime);
             if (!sTime || !eTime) return;
             const dayConfig = scheduleData.days.find(d => d.date === shift.shiftDate);
             if (dayConfig) {
@@ -74,16 +99,16 @@ const PlannerGrid: React.FC<Props> = ({ hierarchy, scheduleData, users, selected
         const isFull = assignedCount >= shift.requiredCapacity;
         const isAlreadyAssigned = selectedUserId && shift.assignedUsers?.some((u: AssignedUser) => u.userId === selectedUserId);
 
-        // Zjistíme, jestli stanoviště VŮBEC vyžaduje kvalifikaci
         const stationObj = hierarchy?.categories.flatMap(c => c.stations).find(s => s.id === shift.stationId);
         const requiresQual = stationObj?.needsQualification === true;
 
         const assignedData = shift.assignedUsers?.map((u: AssignedUser) => {
             const surname = getSurname(u.name);
             const fullUserObj = users.find(user => user.userId === u.userId);
-            // Vykřičník dáme jen tehdy, když to stanoviště vyžaduje!
             const isUnqualified = fullUserObj && requiresQual ? !fullUserObj.qualifiedStationIds?.includes(shift.stationId) : false;
-            return { surname, name: u.name, isUnqualified };
+            const isMe = u.userId === loggedInUserId;
+
+            return { surname, name: u.name, isUnqualified, isMe };
         }) || [];
 
         return (
@@ -94,7 +119,7 @@ const PlannerGrid: React.FC<Props> = ({ hierarchy, scheduleData, users, selected
                             ? assignedData.map(u => u.isUnqualified ? `${u.name} ⚠️ (Zaučení)` : u.name).join(', ')
                             : 'Žádný zaměstnanec'}
                     </Typography>
-                    <Typography variant="body2">Čas: {shift.startTime?.substring(11, 16)} — {shift.endTime?.substring(11, 16)}</Typography>
+                    <Typography variant="body2">Čas: {formatTime(shift.startTime)} — {formatTime(shift.endTime)}</Typography>
                     {shift.description && (
                         <Typography variant="body2" sx={{ color: '#ffb74d', mt: 0.5, fontWeight: 'bold' }}>📝 {shift.description}</Typography>
                     )}
@@ -102,6 +127,7 @@ const PlannerGrid: React.FC<Props> = ({ hierarchy, scheduleData, users, selected
             }>
                 <Box
                     onClick={() => {
+                        if (!isManagerial) return;
                         if (selectedUserId) {
                             if (isAlreadyAssigned) {
                                 onRemoveUser(shift.id, selectedUserId);
@@ -115,17 +141,22 @@ const PlannerGrid: React.FC<Props> = ({ hierarchy, scheduleData, users, selected
                     sx={{
                         width: '100%', minHeight: '38px', borderRadius: 2,
                         bgcolor: isFull ? '#4caf50' : '#ef5350',
-                        cursor: selectedUserId ? (isAlreadyAssigned ? 'pointer' : (isFull ? 'not-allowed' : 'cell')) : 'pointer',
+                        cursor: isManagerial ? (selectedUserId ? (isAlreadyAssigned ? 'pointer' : (isFull ? 'not-allowed' : 'cell')) : 'pointer') : 'default',
                         display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
                         color: 'white', px: 0.5, py: 0.5, position: 'relative', overflow: 'hidden', zIndex: 1,
-                        transition: 'transform 0.1s', '&:hover': { transform: 'scale(1.02)' }
+                        transition: 'transform 0.1s',
+                        '&:hover': { transform: isManagerial ? 'scale(1.02)' : 'none' }
                     }}
                 >
                     {assignedData.slice(0, 2).map((userObj, idx) => (
                         <Typography key={idx} sx={{
                             fontSize: '0.65rem', fontWeight: 'bold', textAlign: 'center', width: '100%', overflow: 'hidden',
-                            color: userObj.isUnqualified ? '#ffeb3b' : 'white',
-                            textShadow: userObj.isUnqualified ? '0px 0px 3px rgba(0,0,0,0.8)' : 'none'
+                            bgcolor: userObj.isMe ? 'white' : 'transparent',
+                            color: userObj.isMe ? 'black' : (userObj.isUnqualified ? '#ffeb3b' : 'white'),
+                            borderRadius: userObj.isMe ? '4px' : '0',
+                            px: userObj.isMe ? 0.5 : 0,
+                            mb: 0.2,
+                            textShadow: userObj.isMe ? 'none' : '0px 0px 3px rgba(0,0,0,0.8)'
                         }}>
                             {userObj.surname} {userObj.isUnqualified && '⚠️'}
                         </Typography>
@@ -194,8 +225,9 @@ const PlannerGrid: React.FC<Props> = ({ hierarchy, scheduleData, users, selected
                                         const afternoonShifts: ScheduleShift[] = [];
 
                                         shiftsForDay.forEach(s => {
-                                            const hour = parseInt(s.startTime?.substring(11, 13) || '0', 10);
-                                            const endHour = parseInt(s.endTime?.substring(11, 13) || '0', 10);
+                                            const hour = getHour(s.startTime);
+                                            const endHour = getHour(s.endTime);
+
                                             if (hour < 12 && endHour >= 15) fullDayShifts.push(s);
                                             else if (hour >= 12) afternoonShifts.push(s);
                                             else morningShifts.push(s);
@@ -205,11 +237,9 @@ const PlannerGrid: React.FC<Props> = ({ hierarchy, scheduleData, users, selected
                                         let dynamicBackground = undefined;
 
                                         if (selectedUser) {
-                                            // OPRAVA: Pokud nevyžaduje kvalifikaci, je automaticky "kvalifikován" a nesvítí oranžově
                                             const isQualified = !stat.needsQualification || selectedUser.qualifiedStationIds?.includes(stat.id);
                                             const avail = selectedUser.weekAvailability?.[day.date];
 
-                                            // Zjistíme, jestli a kdy vybraný brigádník dnes pracuje (na libovolném stanovišti)
                                             const userShiftsToday = scheduleData.shifts?.filter(s =>
                                                 s.shiftDate === day.date &&
                                                 s.assignedUsers.some(au => au.userId === selectedUser.userId)
@@ -219,8 +249,8 @@ const PlannerGrid: React.FC<Props> = ({ hierarchy, scheduleData, users, selected
                                             let hasAfternoon = false;
 
                                             userShiftsToday.forEach(s => {
-                                                const startH = parseInt(s.startTime?.substring(11, 13) || '0', 10);
-                                                const endH = parseInt(s.endTime?.substring(11, 13) || '0', 10);
+                                                const startH = getHour(s.startTime);
+                                                const endH = getHour(s.endTime);
                                                 if (startH < 12 && endH >= 15) { hasMorning = true; hasAfternoon = true; }
                                                 else if (startH >= 12) { hasAfternoon = true; }
                                                 else { hasMorning = true; }
@@ -229,36 +259,28 @@ const PlannerGrid: React.FC<Props> = ({ hierarchy, scheduleData, users, selected
                                             let morningStatus = 'red';
                                             let afternoonStatus = 'red';
 
-                                            // Logika pro ráno
                                             if (avail === 'CELÝ DEN' || avail === 'DOP') {
                                                 if (hasMorning) morningStatus = 'booked';
                                                 else morningStatus = isQualified ? 'green' : 'orange';
                                             }
 
-                                            // Logika pro odpoledne
                                             if (avail === 'CELÝ DEN' || avail === 'ODP') {
                                                 if (hasAfternoon) afternoonStatus = 'booked';
                                                 else afternoonStatus = isQualified ? 'green' : 'orange';
                                             }
 
-                                            // Převodník stavů na barvy
                                             const getColor = (status: string) => {
                                                 if (status === 'green') return 'rgba(76, 175, 80, 0.4)';
                                                 if (status === 'orange') return 'rgba(255, 152, 0, 0.4)';
                                                 if (status === 'red') return 'rgba(244, 67, 54, 0.2)';
-                                                if (status === 'booked') return 'rgba(0, 0, 0, 0.08)'; // Šedá = obsazeno
+                                                if (status === 'booked') return 'rgba(0, 0, 0, 0.08)';
                                                 return 'transparent';
                                             };
 
                                             if (morningStatus === afternoonStatus) {
-                                                // Obě poloviny dne jsou stejné (např. volný celý den)
-                                                if (morningStatus === 'booked') {
-                                                    highlightClass = 'highlight-booked'; // Pokud je plně obsazen, dáme šrafování
-                                                } else {
-                                                    dynamicBackground = getColor(morningStatus);
-                                                }
+                                                if (morningStatus === 'booked') highlightClass = 'highlight-booked';
+                                                else dynamicBackground = getColor(morningStatus);
                                             } else {
-                                                // Rozpůlená barva
                                                 dynamicBackground = `linear-gradient(to right, ${getColor(morningStatus)} 50%, ${getColor(afternoonStatus)} 50%)`;
                                             }
                                         }
@@ -267,7 +289,7 @@ const PlannerGrid: React.FC<Props> = ({ hierarchy, scheduleData, users, selected
                                             <Box key={`${stat.id}-${day.date}`} className={highlightClass} sx={{
                                                 gridColumn: 'span 2', borderRight: '1px solid #eee', borderBottom: '1px solid #eee', p: 0.4,
                                                 display: 'flex', flexDirection: 'column', gap: 0.5, position: 'relative', minHeight: '48px',
-                                                background: dynamicBackground // Aplikujeme půlenou nebo pevnou barvu
+                                                background: dynamicBackground
                                             }}>
                                                 <Box sx={{ position: 'absolute', top: 0, bottom: 0, left: '50%', borderLeft: '1px dashed #eee', zIndex: 0 }} />
                                                 {fullDayShifts.map(s => <Box key={s.id} sx={{ zIndex: 1 }}>{renderShiftPill(s)}</Box>)}

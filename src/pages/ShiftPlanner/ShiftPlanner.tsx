@@ -10,6 +10,7 @@ import {
 import { ArrowBack, ArrowBackIos, ArrowForwardIos } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
 import { ScheduleService } from '../../services/ScheduleService';
+import { useAuth } from '../../context/AuthContext';
 
 import type { WeeklyScheduleResponse, PlannerUser, HierarchyData, ScheduleShift } from '../../types/schedule';
 
@@ -50,6 +51,19 @@ const addWeeks = (dateStr: string, weeks: number) => {
 
 export const ShiftPlanner = () => {
     const navigate = useNavigate();
+    const { userRoles } = useAuth();
+
+    /**
+     * ROBUSTNÍ KONTROLA ROLÍ:
+     * Očišťuje role od prefixu 'ROLE_' a kontroluje, zda uživatel patří do manažerské skupiny.
+     */
+    const isManagerial = useMemo(() => {
+        const managerialRoles = ['ADMIN', 'PLANNER', 'MANAGEMENT', 'MANAGER'];
+        return userRoles.some((role: string) => {
+            const cleanRole = role.replace('ROLE_', '').toUpperCase();
+            return managerialRoles.includes(cleanRole);
+        });
+    }, [userRoles]);
 
     const [viewMode, setViewMode] = useState<'week' | 'day'>('week');
     const [selectedCategory, setSelectedCategory] = useState<number | 'all'>('all');
@@ -64,20 +78,20 @@ export const ShiftPlanner = () => {
     const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
     const [selectedShiftForDetail, setSelectedShiftForDetail] = useState<ScheduleShift | null>(null);
 
-    // <--- PŘIDÁNO: Profiltrujeme celou hierarchii a necháme jen aktivní věci --->
     const activeHierarchy = useMemo(() => {
-        if (!hierarchy) return null;
+        if (!hierarchy || !scheduleData) return null;
+        const currentWeekStationIds = new Set(scheduleData.shifts.map(s => s.stationId));
+
         return {
             categories: hierarchy.categories
-                .filter(cat => cat.isActive !== false) // Zrušíme skryté kategorie
                 .map(cat => ({
                     ...cat,
-                    stations: cat.stations.filter(stat => stat.isActive !== false) // Zrušíme skrytá stanoviště
+                    stations: cat.stations.filter(stat => stat.isActive !== false || currentWeekStationIds.has(stat.id))
                 }))
+                .filter(cat => cat.stations.length > 0)
         };
-    }, [hierarchy]);
+    }, [hierarchy, scheduleData]);
 
-    // Používáme novou profiltrovanou hierarchii
     const allStations = useMemo(() => {
         if (!activeHierarchy) return [];
         return activeHierarchy.categories.flatMap(cat => cat.stations);
@@ -121,6 +135,7 @@ export const ShiftPlanner = () => {
     }, [loadData]);
 
     const handleGenerateConfirm = async (data: GenerateFormValues) => {
+        if (!isManagerial) return;
         try {
             if (data.mode === 'template' && data.templateId !== undefined) {
                 await ScheduleService.generateShifts(data.startDate, data.endDate, data.templateId);
@@ -128,44 +143,27 @@ export const ShiftPlanner = () => {
                 if (data.customShiftType === 'halfDay' && data.customTimeMode === 'exact') {
                     if (data.hasDopo && data.dopoStartTime && data.dopoEndTime) {
                         await ScheduleService.generateCustomShifts({
-                            stationId: data.stationId,
-                            startDate: data.startDate,
-                            endDate: data.endDate,
-                            startTime: data.dopoStartTime,
-                            endTime: data.dopoEndTime,
-                            requiredCapacity: data.capacity!,
-                            useOpeningHours: false,
-                            description: data.description
+                            stationId: data.stationId, startDate: data.startDate, endDate: data.endDate,
+                            startTime: data.dopoStartTime, endTime: data.dopoEndTime,
+                            requiredCapacity: data.capacity!, useOpeningHours: false, description: data.description
                         });
                     }
                     if (data.hasOdpo && data.odpoStartTime && data.odpoEndTime) {
                         await ScheduleService.generateCustomShifts({
-                            stationId: data.stationId,
-                            startDate: data.startDate,
-                            endDate: data.endDate,
-                            startTime: data.odpoStartTime,
-                            endTime: data.odpoEndTime,
-                            requiredCapacity: data.capacity!,
-                            useOpeningHours: false,
-                            description: data.description
+                            stationId: data.stationId, startDate: data.startDate, endDate: data.endDate,
+                            startTime: data.odpoStartTime, endTime: data.odpoEndTime,
+                            requiredCapacity: data.capacity!, useOpeningHours: false, description: data.description
                         });
                     }
                 } else {
                     await ScheduleService.generateCustomShifts({
-                        stationId: data.stationId,
-                        startDate: data.startDate,
-                        endDate: data.endDate,
-                        startTime: data.startTime,
-                        endTime: data.endTime,
-                        requiredCapacity: data.capacity!,
-                        useOpeningHours: data.useOpeningHours,
-                        hasDopo: data.hasDopo,
-                        hasOdpo: data.hasOdpo,
-                        description: data.description
+                        stationId: data.stationId, startDate: data.startDate, endDate: data.endDate,
+                        startTime: data.startTime, endTime: data.endTime,
+                        requiredCapacity: data.capacity!, useOpeningHours: data.useOpeningHours,
+                        hasDopo: data.hasDopo, hasOdpo: data.hasOdpo, description: data.description
                     });
                 }
             }
-
             setIsGenerateModalOpen(false);
             await loadData();
         } catch (error) {
@@ -175,6 +173,7 @@ export const ShiftPlanner = () => {
     };
 
     const handleCopyConfirm = async (data: CopyFormValues) => {
+        if (!isManagerial) return;
         try {
             await ScheduleService.copyWeek(data.sourceWeekStart, data.targetWeekStart);
             setIsCopyModalOpen(false);
@@ -186,6 +185,7 @@ export const ShiftPlanner = () => {
     };
 
     const handleClearConfirm = async () => {
+        if (!isManagerial) return;
         try {
             await ScheduleService.clearWeek(currentWeekStart, endDate);
             setIsClearModalOpen(false);
@@ -197,9 +197,9 @@ export const ShiftPlanner = () => {
     };
 
     const handleAutoPlanConfirm = async (config: AutoPlanConfig) => {
+        if (!isManagerial) return;
         try {
             setIsLoading(true);
-
             await ScheduleService.runAutoPlan({
                 fairnessWeight: config.fairnessWeight,
                 trainingWeight: config.trainingWeight,
@@ -208,7 +208,6 @@ export const ShiftPlanner = () => {
                 endDate: endDate,
                 categoryId: selectedCategory === 'all' ? undefined : selectedCategory
             });
-
             await loadData();
             setIsAutoPlanModalOpen(false);
         } catch (error) {
@@ -219,7 +218,7 @@ export const ShiftPlanner = () => {
     };
 
     const handleAssignUser = async (shiftId: string) => {
-        if (!selectedUserId) return;
+        if (!isManagerial || !selectedUserId) return;
         try {
             await ScheduleService.assignUserToShift(shiftId, selectedUserId);
             await loadData();
@@ -231,6 +230,7 @@ export const ShiftPlanner = () => {
     };
 
     const handleRemoveUser = async (shiftId: string, userId: string) => {
+        if (!isManagerial) return;
         try {
             await ScheduleService.removeUserFromShift(shiftId, userId);
             await loadData();
@@ -245,6 +245,7 @@ export const ShiftPlanner = () => {
     };
 
     const handleUpdateShift = async (shiftId: string, startTime: string, endTime: string, capacity: number, description?: string) => {
+        if (!isManagerial) return;
         try {
             await ScheduleService.updateShift(shiftId, { startTime, endTime, requiredCapacity: capacity, description });
             await loadData();
@@ -256,6 +257,7 @@ export const ShiftPlanner = () => {
     };
 
     const handleSplitShift = async (shiftId: string) => {
+        if (!isManagerial) return;
         try {
             await ScheduleService.splitShift(shiftId);
             await loadData();
@@ -267,14 +269,16 @@ export const ShiftPlanner = () => {
     };
 
     const handleDeleteShift = async (shiftId: string) => {
+        if (!isManagerial) return;
         if (!window.confirm("Opravdu chcete tuto směnu smazat?")) return;
         try {
             await ScheduleService.deleteShift(shiftId);
             await loadData();
             setSelectedShiftForDetail(null);
-        } catch (error) {
-            console.error("Chyba při mazání směny:", error);
-            alert("Nepodařilo se smazat směnu.");
+        } catch (error: unknown) {
+            const err = error as { response?: { data?: { message?: string } } };
+            const errorMsg = err.response?.data?.message || "Nepodařilo se smazat směnu.";
+            alert(errorMsg);
         }
     };
 
@@ -294,54 +298,36 @@ export const ShiftPlanner = () => {
     }
 
     return (
-        <Box sx={{
-            display: 'flex',
-            height: '92vh',
-            backgroundColor: '#f2ece4',
-            overflow: 'hidden'
-        }}>
+        <Box sx={{ display: 'flex', height: '92vh', backgroundColor: '#f2ece4', overflow: 'hidden' }}>
+            {/* SIDEBAR: Vidí manažeři a plánovači */}
+            {isManagerial && (
+                <PlannerSidebar
+                    users={availableUsers}
+                    selectedUserId={selectedUserId}
+                    onSelectUser={setSelectedUserId}
+                    currentWeekDays={scheduleData?.days || []}
+                    allStations={allStations}
+                    shifts={scheduleData?.shifts || []}
+                    viewMode={viewMode}
+                    selectedDate={selectedDate}
+                    onAutoPlan={() => setIsAutoPlanModalOpen(true)}
+                />
+            )}
 
-            <PlannerSidebar
-                users={availableUsers}
-                selectedUserId={selectedUserId}
-                onSelectUser={setSelectedUserId}
-                currentWeekDays={scheduleData?.days || []}
-                allStations={allStations}
-                shifts={scheduleData?.shifts || []}
-                viewMode={viewMode}
-                selectedDate={selectedDate}
-                onAutoPlan={() => setIsAutoPlanModalOpen(true)}
-            />
-
-            <Box sx={{
-                flexGrow: 1,
-                display: 'flex',
-                flexDirection: 'column',
-                p: 1.5,
-                overflow: 'hidden',
-                height: '92vh'
-            }}>
-
-                <Paper elevation={0} sx={{
-                    display: 'flex', flexDirection: 'row', alignItems: 'center', gap: 1.5,
-                    mb: 1, p: 1, bgcolor: 'white', borderRadius: 3, boxShadow: '0 2px 8px rgba(0,0,0,0.05)', whiteSpace: 'nowrap',
-                    flexShrink: 0
-                }}>
+            <Box sx={{ flexGrow: 1, display: 'flex', flexDirection: 'column', p: 1.5, overflow: 'hidden', height: '92vh' }}>
+                <Paper elevation={0} sx={{ display: 'flex', flexDirection: 'row', alignItems: 'center', gap: 1.5, mb: 1, p: 1, bgcolor: 'white', borderRadius: 3, boxShadow: '0 2px 8px rgba(0,0,0,0.05)', whiteSpace: 'nowrap', flexShrink: 0 }}>
                     <IconButton onClick={() => navigate('/dashboard/shifts')} size="small" sx={{ border: '1px solid #eee' }}>
                         <ArrowBack sx={{ color: '#3e3535', fontSize: 20 }} />
                     </IconButton>
 
-                    <Box sx={{ display: 'flex', gap: 0.5 }}>
-                        <Button onClick={() => setIsGenerateModalOpen(true)} size="small" variant="contained" sx={{ bgcolor: '#d3d3d3', color: 'black', borderRadius: 2, fontWeight: 'bold', textTransform: 'none' }}>
-                            Generování
-                        </Button>
-                        <Button onClick={() => setIsCopyModalOpen(true)} size="small" variant="contained" sx={{ bgcolor: '#d3d3d3', color: 'black', borderRadius: 2, fontWeight: 'bold', textTransform: 'none' }}>
-                            Kopírování
-                        </Button>
-                        <Button onClick={() => setIsClearModalOpen(true)} size="small" variant="contained" color="error" sx={{ borderRadius: 2, fontWeight: 'bold', textTransform: 'none' }}>
-                            Vyčistit
-                        </Button>
-                    </Box>
+                    {/* AKČNÍ LIŠTA: Vidí manažeři a plánovači */}
+                    {isManagerial && (
+                        <Box sx={{ display: 'flex', gap: 0.5 }}>
+                            <Button onClick={() => setIsGenerateModalOpen(true)} size="small" variant="contained" sx={{ bgcolor: '#d3d3d3', color: 'black', borderRadius: 2, fontWeight: 'bold', textTransform: 'none' }}>Generování</Button>
+                            <Button onClick={() => setIsCopyModalOpen(true)} size="small" variant="contained" sx={{ bgcolor: '#d3d3d3', color: 'black', borderRadius: 2, fontWeight: 'bold', textTransform: 'none' }}>Kopírování</Button>
+                            <Button onClick={() => setIsClearModalOpen(true)} size="small" variant="contained" color="error" sx={{ borderRadius: 2, fontWeight: 'bold', textTransform: 'none' }}>Vyčistit</Button>
+                        </Box>
+                    )}
 
                     <ToggleButtonGroup value={viewMode} exclusive onChange={(_, val) => val && setViewMode(val)} size="small" sx={{ height: 32, bgcolor: '#f5f5f5' }}>
                         <ToggleButton value="week" sx={{ px: 1.5, textTransform: 'none', fontWeight: 'bold' }}>Týden</ToggleButton>
@@ -350,7 +336,6 @@ export const ShiftPlanner = () => {
 
                     <FormControl size="small" sx={{ minWidth: 140 }}>
                         <InputLabel>Hlavní typ</InputLabel>
-                        {/* OPRAVA: V Dropdownu jsou jen aktivní kategorie */}
                         <Select value={selectedCategory} label="Hlavní typ" onChange={handleCategoryChange} sx={{ borderRadius: 2, height: 32 }}>
                             <MenuItem value="all">Všechny typy</MenuItem>
                             {activeHierarchy?.categories.map((cat) => (
@@ -362,20 +347,12 @@ export const ShiftPlanner = () => {
                     <Box sx={{ flexGrow: 1 }} />
 
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                        <IconButton onClick={handlePrevWeek} size="small" sx={{ border: '1px solid #eee' }}>
-                            <ArrowBackIos sx={{ fontSize: 10, ml: 0.5 }} />
-                        </IconButton>
+                        <IconButton onClick={handlePrevWeek} size="small" sx={{ border: '1px solid #eee' }}><ArrowBackIos sx={{ fontSize: 10, ml: 0.5 }} /></IconButton>
                         <Box sx={{ textAlign: 'center', minWidth: 150 }}>
-                            <Typography variant="body2" sx={{ fontWeight: 'bold', color: '#3e3535', fontSize: '0.85rem', lineHeight: 1 }}>
-                                {new Date(currentWeekStart).toLocaleDateString('cs-CZ', { month: 'long', year: 'numeric' })}
-                            </Typography>
-                            <Typography sx={{ fontSize: '0.65rem', color: '#888' }}>
-                                {currentWeekStart} — {endDate}
-                            </Typography>
+                            <Typography variant="body2" sx={{ fontWeight: 'bold', color: '#3e3535', fontSize: '0.85rem', lineHeight: 1 }}>{new Date(currentWeekStart).toLocaleDateString('cs-CZ', { month: 'long', year: 'numeric' })}</Typography>
+                            <Typography sx={{ fontSize: '0.65rem', color: '#888' }}>{currentWeekStart} — {endDate}</Typography>
                         </Box>
-                        <IconButton onClick={handleNextWeek} size="small" sx={{ border: '1px solid #eee' }}>
-                            <ArrowForwardIos sx={{ fontSize: 10 }} />
-                        </IconButton>
+                        <IconButton onClick={handleNextWeek} size="small" sx={{ border: '1px solid #eee' }}><ArrowForwardIos sx={{ fontSize: 10 }} /></IconButton>
                     </Box>
                 </Paper>
 
@@ -389,16 +366,7 @@ export const ShiftPlanner = () => {
                                 <Button
                                     key={day.date}
                                     onClick={() => setSelectedDate(day.date)}
-                                    sx={{
-                                        flex: 1,
-                                        borderRadius: 0,
-                                        py: 0.5,
-                                        bgcolor: isSelected ? '#3e3535' : 'transparent',
-                                        color: isSelected ? 'white' : '#555',
-                                        fontWeight: isSelected ? 'bold' : 'normal',
-                                        borderRight: '1px solid #eee',
-                                        '&:hover': { bgcolor: isSelected ? '#3e3535' : '#f0f0f0' }
-                                    }}
+                                    sx={{ flex: 1, borderRadius: 0, py: 0.5, bgcolor: isSelected ? '#3e3535' : 'transparent', color: isSelected ? 'white' : '#555', fontWeight: isSelected ? 'bold' : 'normal', borderRight: '1px solid #eee', '&:hover': { bgcolor: isSelected ? '#3e3535' : '#f0f0f0' } }}
                                 >
                                     {dayName} {d.getDate()}.{d.getMonth() + 1}.
                                 </Button>
@@ -407,19 +375,10 @@ export const ShiftPlanner = () => {
                     </Paper>
                 )}
 
-                <Box sx={{
-                    flexGrow: 1,
-                    position: 'relative',
-                    width: '100%',
-                    minHeight: 0
-                }}>
+                <Box sx={{ flexGrow: 1, position: 'relative', width: '100%', minHeight: 0 }}>
                     {viewMode === 'week' ? (
                         <PlannerGrid
-                            // OPRAVA: Mřížce posíláme jen aktivní data
-                            hierarchy={selectedCategory === 'all'
-                                ? activeHierarchy
-                                : activeHierarchy ? { categories: activeHierarchy.categories.filter(c => c.id === selectedCategory) } : null
-                            }
+                            hierarchy={selectedCategory === 'all' ? activeHierarchy : activeHierarchy ? { categories: activeHierarchy.categories.filter(c => c.id === selectedCategory) } : null}
                             scheduleData={scheduleData}
                             users={availableUsers}
                             selectedUserId={selectedUserId}
@@ -429,11 +388,7 @@ export const ShiftPlanner = () => {
                         />
                     ) : (
                         <DailyPlannerGrid
-                            // OPRAVA: Mřížce posíláme jen aktivní data
-                            hierarchy={selectedCategory === 'all'
-                                ? activeHierarchy
-                                : activeHierarchy ? { categories: activeHierarchy.categories.filter(c => c.id === selectedCategory) } : null
-                            }
+                            hierarchy={selectedCategory === 'all' ? activeHierarchy : activeHierarchy ? { categories: activeHierarchy.categories.filter(c => c.id === selectedCategory) } : null}
                             scheduleData={scheduleData}
                             users={availableUsers}
                             selectedUserId={selectedUserId}
@@ -445,61 +400,26 @@ export const ShiftPlanner = () => {
                     )}
                 </Box>
 
-                {/* OPRAVA: V modalu Generování se už taky skryté věci neobjeví */}
-                <GenerateShiftsModal
-                    open={isGenerateModalOpen}
-                    onClose={() => setIsGenerateModalOpen(false)}
-                    onConfirm={handleGenerateConfirm}
-                    hierarchy={activeHierarchy}
-                    currentWeekStart={currentWeekStart}
-                    currentWeekEnd={endDate}
-                />
+                {isManagerial && (
+                    <>
+                        <GenerateShiftsModal open={isGenerateModalOpen} onClose={() => setIsGenerateModalOpen(false)} onConfirm={handleGenerateConfirm} hierarchy={activeHierarchy} currentWeekStart={currentWeekStart} currentWeekEnd={endDate} />
+                        <CopyWeekModal open={isCopyModalOpen} onClose={() => setIsCopyModalOpen(false)} onConfirm={handleCopyConfirm} currentWeekStart={currentWeekStart} />
+                        <Dialog open={isClearModalOpen} onClose={() => setIsClearModalOpen(false)} maxWidth="xs" fullWidth slotProps={{ paper: { sx: { borderRadius: 3 } } }}>
+                            <DialogTitle sx={{ fontWeight: 'bold', color: '#d32f2f' }}>Varování: Vyčištění týdne</DialogTitle>
+                            <DialogContent>
+                                <Typography>Opravdu chcete smazat <strong>VŠECHNY</strong> směny v tomto týdnu ({currentWeekStart} — {endDate})?</Typography>
+                                <Typography variant="body2" color="error" sx={{ mt: 2, fontWeight: 'bold' }}>Tato akce smaže i všechna přiřazení zaměstnanců na tyto směny a nelze ji vzít zpět!</Typography>
+                            </DialogContent>
+                            <DialogActions sx={{ p: 2 }}>
+                                <Button onClick={() => setIsClearModalOpen(false)} color="inherit">Zrušit</Button>
+                                <Button onClick={handleClearConfirm} variant="contained" color="error" sx={{ borderRadius: '20px' }}>Ano, vyčistit</Button>
+                            </DialogActions>
+                        </Dialog>
+                        <AutoPlanModal open={isAutoPlanModalOpen} onClose={() => setIsAutoPlanModalOpen(false)} onConfirm={handleAutoPlanConfirm} viewMode={viewMode} selectedDate={selectedDate} />
+                    </>
+                )}
 
-                <CopyWeekModal
-                    open={isCopyModalOpen}
-                    onClose={() => setIsCopyModalOpen(false)}
-                    onConfirm={handleCopyConfirm}
-                    currentWeekStart={currentWeekStart}
-                />
-
-                <Dialog open={isClearModalOpen} onClose={() => setIsClearModalOpen(false)} maxWidth="xs" fullWidth slotProps={{ paper: { sx: { borderRadius: 3 } } }}>
-                    <DialogTitle sx={{ fontWeight: 'bold', color: '#d32f2f' }}>
-                        Varování: Vyčištění týdne
-                    </DialogTitle>
-                    <DialogContent>
-                        <Typography>
-                            Opravdu chcete smazat <strong>VŠECHNY</strong> směny v tomto týdnu ({currentWeekStart} — {endDate})?
-                        </Typography>
-                        <Typography variant="body2" color="error" sx={{ mt: 2, fontWeight: 'bold' }}>
-                            Tato akce smaže i všechna přiřazení zaměstnanců na tyto směny a nelze ji vzít zpět!
-                        </Typography>
-                    </DialogContent>
-                    <DialogActions sx={{ p: 2 }}>
-                        <Button onClick={() => setIsClearModalOpen(false)} color="inherit">Zrušit</Button>
-                        <Button onClick={handleClearConfirm} variant="contained" color="error" sx={{ borderRadius: '20px' }}>
-                            Ano, vyčistit
-                        </Button>
-                    </DialogActions>
-                </Dialog>
-
-                <ShiftDetailModal
-                    key={selectedShiftForDetail?.id || 'empty'}
-                    open={!!selectedShiftForDetail}
-                    onClose={() => setSelectedShiftForDetail(null)}
-                    shift={selectedShiftForDetail}
-                    onRemoveUser={handleRemoveUser}
-                    onUpdateShift={handleUpdateShift}
-                    onSplitShift={handleSplitShift}
-                    onDeleteShift={handleDeleteShift}
-                />
-
-                <AutoPlanModal
-                    open={isAutoPlanModalOpen}
-                    onClose={() => setIsAutoPlanModalOpen(false)}
-                    onConfirm={handleAutoPlanConfirm}
-                    viewMode={viewMode}
-                    selectedDate={selectedDate}
-                />
+                <ShiftDetailModal key={selectedShiftForDetail?.id || 'empty'} open={!!selectedShiftForDetail} onClose={() => setSelectedShiftForDetail(null)} shift={selectedShiftForDetail} onRemoveUser={handleRemoveUser} onUpdateShift={handleUpdateShift} onSplitShift={handleSplitShift} onDeleteShift={handleDeleteShift} />
             </Box>
         </Box>
     );

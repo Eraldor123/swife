@@ -17,20 +17,13 @@ interface Props {
     onRemoveUser: (shiftId: string, userId: string) => void;
     onUpdateShift: (shiftId: string, startTime: string, endTime: string, capacity: number, description?: string) => void;
     onSplitShift: (shiftId: string) => void;
-    onDeleteShift: (shiftId: string) => void; // <--- PŘIDÁNO
+    onDeleteShift: (shiftId: string) => void;
 }
 
-const ShiftDetailModal: React.FC<Props> = ({
-                                               open,
-                                               onClose,
-                                               shift,
-                                               onRemoveUser,
-                                               onUpdateShift,
-                                               onSplitShift,
-                                               onDeleteShift // <--- PŘIDÁNO
-                                           }) => {
+const ShiftDetailModal: React.FC<Props> = ({ open, onClose, shift, onRemoveUser, onUpdateShift, onSplitShift, onDeleteShift }) => {
     const [isEditing, setIsEditing] = useState(false);
 
+    // Initial state setup. No need for useEffect due to key={shift.id} in parent.
     const [startTime, setStartTime] = useState(shift?.startTime.substring(11, 16) || '');
     const [endTime, setEndTime] = useState(shift?.endTime.substring(11, 16) || '');
     const [capacity, setCapacity] = useState<number>(shift?.requiredCapacity || 1);
@@ -54,7 +47,13 @@ const ShiftDetailModal: React.FC<Props> = ({
     };
 
     return (
-        <Dialog open={open} onClose={onClose} maxWidth="xs" fullWidth slotProps={{ paper: { sx: { borderRadius: 4 } } }}>
+        <Dialog
+            open={open}
+            onClose={onClose}
+            maxWidth="xs"
+            fullWidth
+            slotProps={{ paper: { sx: { borderRadius: 4 } } }}
+        >
             <DialogTitle sx={{ bgcolor: '#f8f9fa', pb: 2 }}>
                 <Typography component="div" variant="h6" sx={{ fontWeight: 'bold', color: '#3e3535' }}>
                     {isEditing ? 'Upravit parametry směny' : 'Detail směny'}
@@ -75,7 +74,7 @@ const ShiftDetailModal: React.FC<Props> = ({
                                 type="time"
                                 value={startTime}
                                 onChange={(e) => setStartTime(e.target.value)}
-                                InputLabelProps={{ shrink: true }}
+                                slotProps={{ inputLabel: { shrink: true } }}
                                 fullWidth
                                 size="small"
                             />
@@ -84,7 +83,7 @@ const ShiftDetailModal: React.FC<Props> = ({
                                 type="time"
                                 value={endTime}
                                 onChange={(e) => setEndTime(e.target.value)}
-                                InputLabelProps={{ shrink: true }}
+                                slotProps={{ inputLabel: { shrink: true } }}
                                 fullWidth
                                 size="small"
                             />
@@ -94,7 +93,7 @@ const ShiftDetailModal: React.FC<Props> = ({
                             type="number"
                             value={capacity}
                             onChange={(e) => setCapacity(parseInt(e.target.value) || 1)}
-                            inputProps={{ min: 1 }}
+                            slotProps={{ htmlInput: { min: 1 } }}
                             fullWidth
                             size="small"
                         />
@@ -147,7 +146,13 @@ const ShiftDetailModal: React.FC<Props> = ({
                                                 {user.name.charAt(0)}
                                             </Avatar>
                                         </ListItemAvatar>
-                                        <ListItemText primary={<Typography sx={{ fontWeight: 'bold', color: '#3e3535', fontSize: '0.9rem' }}>{user.name}</Typography>} />
+                                        <ListItemText
+                                            primary={
+                                                <Typography sx={{ fontWeight: 'bold', color: '#3e3535', fontSize: '0.9rem' }}>
+                                                    {user.name}
+                                                </Typography>
+                                            }
+                                        />
                                     </ListItem>
                                 ))
                             )}
@@ -159,7 +164,14 @@ const ShiftDetailModal: React.FC<Props> = ({
             <DialogActions sx={{ p: 2, bgcolor: '#f8f9fa', justifyContent: 'space-between' }}>
                 {isEditing ? (
                     <>
-                        <Button startIcon={<CloseIcon />} onClick={() => setIsEditing(false)} color="inherit" sx={{ textTransform: 'none' }}>Zrušit</Button>
+                        <Button
+                            startIcon={<CloseIcon />}
+                            onClick={() => setIsEditing(false)}
+                            color="inherit"
+                            sx={{ textTransform: 'none' }}
+                        >
+                            Zrušit
+                        </Button>
                         <Box sx={{ display: 'flex', gap: 1 }}>
                             {isFullDay && (
                                 <Button
@@ -171,13 +183,20 @@ const ShiftDetailModal: React.FC<Props> = ({
                                     Rozdělit
                                 </Button>
                             )}
-                            <Button startIcon={<SaveIcon />} onClick={handleSave} variant="contained" color="primary" sx={{ borderRadius: '10px', textTransform: 'none', px: 3 }}>Uložit</Button>
+                            <Button
+                                startIcon={<SaveIcon />}
+                                onClick={handleSave}
+                                variant="contained"
+                                color="primary"
+                                sx={{ borderRadius: '10px', textTransform: 'none', px: 3 }}
+                            >
+                                Uložit
+                            </Button>
                         </Box>
                     </>
                 ) : (
                     <>
                         <Box sx={{ display: 'flex', gap: 0.5 }}>
-                            {/* TLAČÍTKO PRO SMAZÁNÍ SMĚNY */}
                             <Button
                                 startIcon={<DeleteIcon />}
                                 onClick={() => onDeleteShift(shift.id)}

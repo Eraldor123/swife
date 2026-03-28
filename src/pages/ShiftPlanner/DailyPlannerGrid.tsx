@@ -1,7 +1,8 @@
 // src/components/shifts/Planner/DailyPlannerGrid.tsx
 
-import React from 'react';
+import React, { useMemo } from 'react'; // PŘIDÁNO: useMemo
 import { Box, Typography, Paper, Tooltip } from '@mui/material';
+import { useAuth } from '../../context/AuthContext';
 import type {
     WeeklyScheduleResponse,
     ScheduleShift,
@@ -11,7 +12,6 @@ import type {
     HierarchyStation
 } from '../../types/schedule';
 
-// 1. PŘIDÁNO: onRemoveUser
 interface Props {
     hierarchy: HierarchyData | null;
     scheduleData: WeeklyScheduleResponse | null;
@@ -19,7 +19,7 @@ interface Props {
     selectedUserId: string | null;
     selectedDate: string;
     onAssignUser: (shiftId: string) => void;
-    onRemoveUser: (shiftId: string, userId: string) => void; // <--- PŘIDÁNO
+    onRemoveUser: (shiftId: string, userId: string) => void;
     onShiftClick: (shift: ScheduleShift) => void;
 }
 
@@ -33,8 +33,36 @@ const getSurname = (fullName: string) => {
     return parts.length > 1 ? parts[parts.length - 1] : fullName;
 };
 
-// 2. PŘIDÁNO: onRemoveUser do destrukce parametrů
+const formatTime = (isoString: string) => {
+    if (!isoString) return '';
+    return isoString.substring(11, 16);
+};
+
+const getHour = (isoString: string) => {
+    if (!isoString) return 0;
+    return parseInt(isoString.substring(11, 13), 10);
+};
+
+const getMinute = (isoString: string) => {
+    if (!isoString) return 0;
+    return parseInt(isoString.substring(14, 16), 10);
+};
+
 const DailyPlannerGrid: React.FC<Props> = ({ hierarchy, scheduleData, users, selectedUserId, selectedDate, onAssignUser, onRemoveUser, onShiftClick }) => {
+    const { userRoles, userId: loggedInUserId } = useAuth();
+
+    /**
+     * ROBUSTNÍ KONTROLA ROLÍ:
+     * Stejná logika jako v ShiftPlanner.tsx pro zajištění přístupu Plánovačům.
+     */
+    const isManagerial = useMemo(() => {
+        const managerialRoles = ['ADMIN', 'PLANNER', 'MANAGEMENT', 'MANAGER'];
+        return userRoles.some((role: string) => {
+            const cleanRole = role.replace('ROLE_', '').toUpperCase();
+            return managerialRoles.includes(cleanRole);
+        });
+    }, [userRoles]);
+
     if (!hierarchy || !scheduleData) return null;
 
     const selectedUser = Array.isArray(users) ? users.find(u => u.userId === selectedUserId) : null;
@@ -42,8 +70,8 @@ const DailyPlannerGrid: React.FC<Props> = ({ hierarchy, scheduleData, users, sel
 
     const getGridColumn = (timeStr: string) => {
         if (!timeStr) return 1;
-        const h = parseInt(timeStr.substring(11, 13), 10);
-        const m = parseInt(timeStr.substring(14, 16), 10);
+        const h = getHour(timeStr);
+        const m = getMinute(timeStr);
 
         let segment = (h - MIN_HOUR) * 2 + (m >= 30 ? 1 : 0) + 1;
         if (segment < 1) segment = 1;
@@ -57,30 +85,25 @@ const DailyPlannerGrid: React.FC<Props> = ({ hierarchy, scheduleData, users, sel
         const assignedCount = shift.assignedUsers?.length || 0;
         const isFull = assignedCount >= shift.requiredCapacity;
         const isAlreadyAssigned = selectedUserId && shift.assignedUsers?.some(u => u.userId === selectedUserId);
+        const isMeAssigned = shift.assignedUsers?.some(u => u.userId === loggedInUserId);
 
         let bgColor = isFull ? '#4caf50' : '#ef5350';
 
-
         if (selectedUser) {
-            // <--- OPRAVA: Pokud nevyžaduje kvalifikaci, bereme ho jako kvalifikovaného --->
             const isQualified = !stat.needsQualification || selectedUser.qualifiedStationIds?.includes(stat.id);
             const avail = selectedUser.weekAvailability?.[selectedDate];
-            const shiftStartH = parseInt(shift.startTime.substring(11, 13), 10);
-
-            // ... (zbytek zůstává)
+            const shiftStartH = getHour(shift.startTime);
 
             let hasTime = false;
             if (avail === 'CELÝ DEN') hasTime = true;
             else if (avail === 'DOP' && shiftStartH < 13) hasTime = true;
             else if (avail === 'ODP' && shiftStartH >= 12) hasTime = true;
 
-            if (isAlreadyAssigned) bgColor = '#9e9e9e'; // Šedá - už zde dělá
-            else if (!hasTime) bgColor = '#ef5350';     // Červená - nemá čas
-            else if (!isQualified) bgColor = '#ffb300'; // Oranžová - nemá kvalifikaci
-            else bgColor = '#4caf50';                   // Zelená - může dělat
+            if (isAlreadyAssigned) bgColor = '#9e9e9e';
+            else if (!hasTime) bgColor = '#ef5350';
+            else if (!isQualified) bgColor = '#ffb300';
+            else bgColor = '#4caf50';
         }
-
-        const assignedNames = shift.assignedUsers?.map(u => getSurname(u.name)).join(', ');
 
         return (
             <Tooltip
@@ -88,9 +111,9 @@ const DailyPlannerGrid: React.FC<Props> = ({ hierarchy, scheduleData, users, sel
                 arrow
                 title={
                     <Box sx={{ p: 1, fontSize: '0.75rem' }}>
-                        <Typography variant="body2">Čas: {shift.startTime?.substring(11, 16)} — {shift.endTime?.substring(11, 16)}</Typography>
+                        <Typography variant="body2">Čas: {formatTime(shift.startTime)} — {formatTime(shift.endTime)}</Typography>
                         <Typography variant="caption" sx={{ fontWeight: 'bold', display: 'block', mt: 0.5 }}>
-                            Lidé: {assignedNames || 'Nikdo'}
+                            Lidé: {shift.assignedUsers?.map(u => u.name).join(', ') || 'Nikdo'}
                         </Typography>
                         {shift.description && <Typography variant="body2" sx={{ color: '#ffb74d', mt: 0.5 }}>📝 {shift.description}</Typography>}
                     </Box>
@@ -98,8 +121,8 @@ const DailyPlannerGrid: React.FC<Props> = ({ hierarchy, scheduleData, users, sel
             >
                 <Box
                     onClick={() => {
+                        if (!isManagerial) return;
                         if (selectedUserId) {
-                            // 3. OPRAVA LOGIKY: Pokud je přiřazený, odebereme ho
                             if (isAlreadyAssigned) {
                                 onRemoveUser(shift.id, selectedUserId);
                             } else if (!isFull) {
@@ -113,25 +136,38 @@ const DailyPlannerGrid: React.FC<Props> = ({ hierarchy, scheduleData, users, sel
                         gridColumn: `${startCol} / ${endCol}`,
                         bgcolor: bgColor,
                         color: 'white',
-                        borderRadius: 1, // Ostřejší hrany jako v ukázce
-                        height: '42px', // Roztažení bloku po celé výšce řádku
+                        borderRadius: 1,
+                        height: '42px',
                         px: 1.5,
                         fontSize: '0.75rem',
                         fontWeight: 'bold',
                         display: 'flex',
                         alignItems: 'center',
                         justifyContent: 'space-between',
-                        // 4. OPRAVA KURZORU: Umožní kliknout na odebrání
-                        cursor: selectedUserId ? (isAlreadyAssigned ? 'pointer' : (isFull ? 'not-allowed' : 'cell')) : 'pointer',
-                        boxShadow: '0 2px 4px rgba(0,0,0,0.15)', // Lehce výraznější stín
+                        cursor: isManagerial ? (selectedUserId ? 'pointer' : 'pointer') : 'default',
+                        border: isMeAssigned ? '2px solid white' : 'none',
+                        boxShadow: isMeAssigned ? '0 0 10px rgba(255,255,255,0.5)' : '0 2px 4px rgba(0,0,0,0.15)',
                         overflow: 'hidden',
                         whiteSpace: 'nowrap',
                         transition: 'transform 0.1s',
-                        zIndex: 2, // Tohle zabrání prosvítání čar!
-                        '&:hover': { transform: 'scale(1.01)', zIndex: 3 }
+                        zIndex: 2,
+                        '&:hover': {
+                            transform: isManagerial ? 'scale(1.01)' : 'none',
+                            zIndex: 3
+                        }
                     }}
                 >
-                    <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>{assignedNames || 'Volno'}</span>
+                    <Box sx={{ overflow: 'hidden', textOverflow: 'ellipsis', display: 'flex', gap: 0.5 }}>
+                        {shift.assignedUsers.map((u, i) => (
+                            <span key={u.userId} style={{
+                                textDecoration: u.userId === loggedInUserId ? 'underline' : 'none',
+                                fontWeight: u.userId === loggedInUserId ? '900' : 'bold'
+                            }}>
+                                {getSurname(u.name)}{i < shift.assignedUsers.length - 1 ? ',' : ''}
+                            </span>
+                        ))}
+                        {shift.assignedUsers.length === 0 && <span>Volno</span>}
+                    </Box>
                     <span>[{assignedCount}/{shift.requiredCapacity}]</span>
                 </Box>
             </Tooltip>
@@ -169,7 +205,6 @@ const DailyPlannerGrid: React.FC<Props> = ({ hierarchy, scheduleData, users, sel
                                 </Box>
 
                                 <Box sx={{ display: 'grid', gridTemplateColumns: `repeat(${TOTAL_HALF_HOURS}, 1fr)`, position: 'relative', p: 0.5, alignItems: 'center' }}>
-                                    {/* Pozadí s čarami */}
                                     <Box sx={{ position: 'absolute', inset: 0, display: 'grid', gridTemplateColumns: `repeat(${MAX_HOUR - MIN_HOUR}, 1fr)`, pointerEvents: 'none', zIndex: 1 }}>
                                         {Array.from({ length: MAX_HOUR - MIN_HOUR }).map((_, i) => (
                                             <Box key={i} sx={{ borderRight: '1px dashed #e0e0e0', height: '100%' }} />

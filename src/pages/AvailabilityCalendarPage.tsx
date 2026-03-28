@@ -24,6 +24,8 @@ interface BackendAvailabilityDto {
     hoursWorked?: number;
     positionName?: string;
     note?: string;
+    startTime?: string; // PŘIDÁNO: Připraveno pro backend
+    endTime?: string;   // PŘIDÁNO: Připraveno pro backend
 }
 
 interface UiAvailabilityDayDto {
@@ -31,6 +33,24 @@ interface UiAvailabilityDayDto {
     morning: boolean;
     afternoon: boolean;
 }
+
+// FUNKCE PRO VÝPOČET HODIN (Včetně pauzy)
+const calculateShiftHours = (startTimeStr?: string, endTimeStr?: string): string => {
+    if (!startTimeStr || !endTimeStr) return "0";
+    const start = new Date(startTimeStr);
+    const end = new Date(endTimeStr);
+
+    // Vypočítáme rozdíl v milisekundách a převedeme na hodiny
+    let diffInHours = (end.getTime() - start.getTime()) / (1000 * 60 * 60);
+
+    // Pokud je směna delší než 6 hodin, automaticky odečteme 30 minut (0.5h) pauzu
+    if (diffInHours > 6) {
+        diffInHours -= 0.5;
+    }
+
+    // Zajistíme, že hodiny nebudou záporné, a zaokrouhlíme na 1 desetinné místo
+    return Math.max(0, diffInHours).toFixed(1);
+};
 
 const getAvailabilityGradient = (data: BackendAvailabilityDto | UiAvailabilityDayDto | undefined, isUiOnly = false): string => {
     if (!data) return '#ffebee';
@@ -127,8 +147,6 @@ const AvailabilityCalendarPage: React.FC = () => {
     const [uiChanges, setUiChanges] = useState<UiAvailabilityDayDto[]>([]);
     const [loading, setLoading] = useState(false);
 
-    const mockWorkedShift = { hoursWorked: 8.5, positionName: "Skladník / Manipulant", note: "Ukázková data z minulosti." };
-
     const fetchAvailabilities = useCallback(async (month: Dayjs) => {
         if (!userId) return;
 
@@ -171,17 +189,15 @@ const AvailabilityCalendarPage: React.FC = () => {
                 return dbDate ? dayjs(dbDate).format('YYYY-MM-DD') === dateStr : false;
             });
 
-            // POJISTKA: Zabráníme editaci modrého (potvrzeného) políčka
             const isConf = existingBackend ? (existingBackend.isConfirmed === true || existingBackend.confirmed === true) : false;
             if (isConf) {
                 setStatus({ type: 'error', message: 'Na tento den už máte naplánovanou směnu, nelze jej změnit.' });
                 setSnackbarOpen(true);
-                return; // Okno se vůbec neotevře
+                return;
             }
 
             const data = existingUi || existingBackend;
 
-            // Nastavíme správnou volbu do přepínače, včetně možnosti "NONE" (zrušeno)
             if (data) {
                 if (data.morning && data.afternoon) setShiftType('FULL_DAY');
                 else if (data.morning) setShiftType('MORNING');
@@ -198,7 +214,6 @@ const AvailabilityCalendarPage: React.FC = () => {
         if (!selectedDate) return;
         const dateStr = selectedDate.format('YYYY-MM-DD');
 
-        // Tady už nic neblokujeme. Uživatel si do seznamu úprav může přidat cokoliv.
         const newDay: UiAvailabilityDayDto = {
             date: dateStr,
             morning: shiftType === 'FULL_DAY' || shiftType === 'MORNING',
@@ -222,19 +237,15 @@ const AvailabilityCalendarPage: React.FC = () => {
             const token = localStorage.getItem('token');
             const monthStr = currentMonth.format('YYYY-MM');
 
-            // INTELIGENTNÍ SLOUČENÍ: Abychom na backendu nepřemazali uživatelovy dřívější dny
             const mergedMap = new Map();
 
-            // 1. Naházíme tam všechno, co už bylo uložené (staré zelené a modré dny)
             savedAvailabilities.forEach(day => {
                 const dStr = day.availableDate || day.date;
                 if (dStr) mergedMap.set(dStr, { ...day, date: dStr, availableDate: dStr });
             });
 
-            // 2. Přepíšeme to tím, co uživatel zrovna naklikal
             uiChanges.forEach(day => {
                 if (!day.morning && !day.afternoon) {
-                    // Uživatel dal "Nemám čas" -> úplně ten den vyhodíme z mapy
                     mergedMap.delete(day.date);
                 } else {
                     const existing = mergedMap.get(day.date) || {};
@@ -247,7 +258,6 @@ const AvailabilityCalendarPage: React.FC = () => {
                 }
             });
 
-            // Převod mapy na pole k odeslání
             const payloadDays = Array.from(mergedMap.values());
 
             const response = await fetch('http://localhost:8080/api/v1/availabilities/monthly', {
@@ -259,11 +269,9 @@ const AvailabilityCalendarPage: React.FC = () => {
             if (response.ok) {
                 setStatus({ type: 'success', message: 'Změny byly uloženy!' });
 
-                // Optimistický update (vyčistíme dočasný seznam a překreslíme natvrdo)
                 setSavedAvailabilities(payloadDays);
                 setUiChanges([]);
 
-                // Synchronizace s backendem
                 await fetchAvailabilities(currentMonth);
             } else {
                 setStatus({ type: 'error', message: 'Chyba při ukládání.' });
@@ -278,6 +286,19 @@ const AvailabilityCalendarPage: React.FC = () => {
     };
 
     const isInspectMode = viewMode === 'INSPECT';
+
+    // === VÝPOČET DAT PRO MODAL ===
+    const currentBackendDay = savedAvailabilities.find(a => {
+        const dbDate = a.availableDate || a.date;
+        return dbDate ? dayjs(dbDate).format('YYYY-MM-DD') === selectedDate?.format('YYYY-MM-DD') : false;
+    });
+
+    const displayHours = (currentBackendDay?.startTime && currentBackendDay?.endTime)
+        ? calculateShiftHours(currentBackendDay.startTime, currentBackendDay.endTime)
+        : currentBackendDay?.hoursWorked?.toString() || "8.5"; // Záložní fallback, dokud to nepropojíte
+
+    const displayPosition = currentBackendDay?.positionName || "Skladník / Manipulant";
+    const displayNote = currentBackendDay?.note || "Směna potvrzena systémem.";
 
     return (
         <LocalizationProvider dateAdapter={AdapterDayjs} adapterLocale="cs">
@@ -338,7 +359,6 @@ const AvailabilityCalendarPage: React.FC = () => {
                                         <Box key={day.date} sx={{ p: 1.5, mb: 1, bgcolor: '#f5f5f5', borderRadius: 2 }}>
                                             <Typography variant="body2" fontWeight="bold">{dayjs(day.date).format('D. MMMM YYYY')}</Typography>
                                             <Typography variant="caption" color="textSecondary" sx={{ color: (!day.morning && !day.afternoon) ? 'red' : 'inherit' }}>
-                                                {/* Text v seznamu podle toho, co člověk naklikal */}
                                                 {day.morning && day.afternoon ? 'Celý den' :
                                                     (day.morning ? 'Dopoledne' :
                                                         (day.afternoon ? 'Odpoledne' : 'Zrušeno (Nemám čas)'))}
@@ -361,11 +381,23 @@ const AvailabilityCalendarPage: React.FC = () => {
                             <Box sx={{ mt: 1 }}>
                                 <Typography variant="h6" color="primary" sx={{ mb: 2, fontWeight: 'bold' }}>Detail odpracované směny</Typography>
                                 <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
-                                    <Box sx={{ display: 'flex', justifyContent: 'space-between' }}><Typography color="textSecondary">Odpracováno:</Typography><Typography fontWeight="bold">{mockWorkedShift.hoursWorked} hodin</Typography></Box>
+                                    <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
+                                        <Typography color="textSecondary">Odpracováno:</Typography>
+                                        {/* TADY JE NAPOJENÁ NOVÁ PROMĚNNÁ */}
+                                        <Typography fontWeight="bold">{displayHours} hodin</Typography>
+                                    </Box>
                                     <Divider />
-                                    <Box sx={{ display: 'flex', justifyContent: 'space-between' }}><Typography color="textSecondary">Pozice:</Typography><Typography fontWeight="bold">{mockWorkedShift.positionName}</Typography></Box>
+                                    <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
+                                        <Typography color="textSecondary">Pozice:</Typography>
+                                        <Typography fontWeight="bold">{displayPosition}</Typography>
+                                    </Box>
                                     <Divider />
-                                    <Box sx={{ display: 'flex', flexDirection: 'column' }}><Typography color="textSecondary" sx={{ mb: 0.5 }}>Poznámka:</Typography><Typography variant="body2" sx={{ bgcolor: '#f5f5f5', p: 1.5, borderRadius: 1, fontStyle: 'italic' }}>"{mockWorkedShift.note}"</Typography></Box>
+                                    <Box sx={{ display: 'flex', flexDirection: 'column' }}>
+                                        <Typography color="textSecondary" sx={{ mb: 0.5 }}>Poznámka:</Typography>
+                                        <Typography variant="body2" sx={{ bgcolor: '#f5f5f5', p: 1.5, borderRadius: 1, fontStyle: 'italic' }}>
+                                            "{displayNote}"
+                                        </Typography>
+                                    </Box>
                                 </Box>
                             </Box>
                         ) : (
@@ -375,7 +407,6 @@ const AvailabilityCalendarPage: React.FC = () => {
                                     <FormControlLabel value="FULL_DAY" control={<Radio />} label="Celý den" />
                                     <FormControlLabel value="MORNING" control={<Radio />} label="Pouze dopoledne" />
                                     <FormControlLabel value="AFTERNOON" control={<Radio />} label="Pouze odpoledne" />
-                                    {/* NOVINKA: Tlačítko pro vymazání dne */}
                                     <FormControlLabel value="NONE" control={<Radio sx={{ color: 'error.main', '&.Mui-checked': { color: 'error.main' } }} />} label={<Typography color="error">Zrušit (Nemám čas)</Typography>} />
                                 </RadioGroup>
                             </Box>
