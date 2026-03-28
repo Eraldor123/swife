@@ -1,3 +1,5 @@
+// src/components/shifts/Planner/DailyPlannerGrid.tsx
+
 import React from 'react';
 import { Box, Typography, Paper, Tooltip } from '@mui/material';
 import type {
@@ -9,6 +11,7 @@ import type {
     HierarchyStation
 } from '../../types/schedule';
 
+// 1. PŘIDÁNO: onRemoveUser
 interface Props {
     hierarchy: HierarchyData | null;
     scheduleData: WeeklyScheduleResponse | null;
@@ -16,6 +19,7 @@ interface Props {
     selectedUserId: string | null;
     selectedDate: string;
     onAssignUser: (shiftId: string) => void;
+    onRemoveUser: (shiftId: string, userId: string) => void; // <--- PŘIDÁNO
     onShiftClick: (shift: ScheduleShift) => void;
 }
 
@@ -29,7 +33,8 @@ const getSurname = (fullName: string) => {
     return parts.length > 1 ? parts[parts.length - 1] : fullName;
 };
 
-const DailyPlannerGrid: React.FC<Props> = ({ hierarchy, scheduleData, users, selectedUserId, selectedDate, onAssignUser, onShiftClick }) => {
+// 2. PŘIDÁNO: onRemoveUser do destrukce parametrů
+const DailyPlannerGrid: React.FC<Props> = ({ hierarchy, scheduleData, users, selectedUserId, selectedDate, onAssignUser, onRemoveUser, onShiftClick }) => {
     if (!hierarchy || !scheduleData) return null;
 
     const selectedUser = Array.isArray(users) ? users.find(u => u.userId === selectedUserId) : null;
@@ -55,11 +60,14 @@ const DailyPlannerGrid: React.FC<Props> = ({ hierarchy, scheduleData, users, sel
 
         let bgColor = isFull ? '#4caf50' : '#ef5350';
 
-        // OPRAVA BAREV: Používáme pevné Hex barvy (žádné rgba), aby neprosvítaly svislé čáry
+
         if (selectedUser) {
-            const isQualified = selectedUser.qualifiedStationIds?.includes(stat.id);
+            // <--- OPRAVA: Pokud nevyžaduje kvalifikaci, bereme ho jako kvalifikovaného --->
+            const isQualified = !stat.needsQualification || selectedUser.qualifiedStationIds?.includes(stat.id);
             const avail = selectedUser.weekAvailability?.[selectedDate];
             const shiftStartH = parseInt(shift.startTime.substring(11, 13), 10);
+
+            // ... (zbytek zůstává)
 
             let hasTime = false;
             if (avail === 'CELÝ DEN') hasTime = true;
@@ -91,7 +99,12 @@ const DailyPlannerGrid: React.FC<Props> = ({ hierarchy, scheduleData, users, sel
                 <Box
                     onClick={() => {
                         if (selectedUserId) {
-                            if (!isAlreadyAssigned && !isFull) onAssignUser(shift.id);
+                            // 3. OPRAVA LOGIKY: Pokud je přiřazený, odebereme ho
+                            if (isAlreadyAssigned) {
+                                onRemoveUser(shift.id, selectedUserId);
+                            } else if (!isFull) {
+                                onAssignUser(shift.id);
+                            }
                         } else {
                             onShiftClick(shift);
                         }
@@ -108,7 +121,8 @@ const DailyPlannerGrid: React.FC<Props> = ({ hierarchy, scheduleData, users, sel
                         display: 'flex',
                         alignItems: 'center',
                         justifyContent: 'space-between',
-                        cursor: selectedUserId ? (isAlreadyAssigned || isFull ? 'not-allowed' : 'cell') : 'pointer',
+                        // 4. OPRAVA KURZORU: Umožní kliknout na odebrání
+                        cursor: selectedUserId ? (isAlreadyAssigned ? 'pointer' : (isFull ? 'not-allowed' : 'cell')) : 'pointer',
                         boxShadow: '0 2px 4px rgba(0,0,0,0.15)', // Lehce výraznější stín
                         overflow: 'hidden',
                         whiteSpace: 'nowrap',

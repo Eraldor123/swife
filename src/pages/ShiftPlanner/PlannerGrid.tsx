@@ -19,6 +19,7 @@ interface Props {
     users: PlannerUser[];
     selectedUserId: string | null;
     onAssignUser: (shiftId: string) => void;
+    onRemoveUser: (shiftId: string, userId: string) => void;
     onShiftClick: (shift: ScheduleShift) => void;
 }
 
@@ -38,7 +39,7 @@ const getSurname = (fullName: string) => {
     return parts.length > 1 ? parts[parts.length - 1] : fullName;
 };
 
-const PlannerGrid: React.FC<Props> = ({ hierarchy, scheduleData, users, selectedUserId, onAssignUser, onShiftClick }) => {
+const PlannerGrid: React.FC<Props> = ({ hierarchy, scheduleData, users, selectedUserId, onAssignUser, onRemoveUser, onShiftClick }) => {
     if (!hierarchy || !scheduleData || !scheduleData.days) return null;
 
     const daysCount = scheduleData.days.length;
@@ -73,10 +74,15 @@ const PlannerGrid: React.FC<Props> = ({ hierarchy, scheduleData, users, selected
         const isFull = assignedCount >= shift.requiredCapacity;
         const isAlreadyAssigned = selectedUserId && shift.assignedUsers?.some((u: AssignedUser) => u.userId === selectedUserId);
 
+        // Zjistíme, jestli stanoviště VŮBEC vyžaduje kvalifikaci
+        const stationObj = hierarchy?.categories.flatMap(c => c.stations).find(s => s.id === shift.stationId);
+        const requiresQual = stationObj?.needsQualification === true;
+
         const assignedData = shift.assignedUsers?.map((u: AssignedUser) => {
             const surname = getSurname(u.name);
             const fullUserObj = users.find(user => user.userId === u.userId);
-            const isUnqualified = fullUserObj ? !fullUserObj.qualifiedStationIds?.includes(shift.stationId) : false;
+            // Vykřičník dáme jen tehdy, když to stanoviště vyžaduje!
+            const isUnqualified = fullUserObj && requiresQual ? !fullUserObj.qualifiedStationIds?.includes(shift.stationId) : false;
             return { surname, name: u.name, isUnqualified };
         }) || [];
 
@@ -97,7 +103,11 @@ const PlannerGrid: React.FC<Props> = ({ hierarchy, scheduleData, users, selected
                 <Box
                     onClick={() => {
                         if (selectedUserId) {
-                            if (!isAlreadyAssigned && !isFull) onAssignUser(shift.id);
+                            if (isAlreadyAssigned) {
+                                onRemoveUser(shift.id, selectedUserId);
+                            } else if (!isFull) {
+                                onAssignUser(shift.id);
+                            }
                         } else {
                             onShiftClick(shift);
                         }
@@ -105,7 +115,7 @@ const PlannerGrid: React.FC<Props> = ({ hierarchy, scheduleData, users, selected
                     sx={{
                         width: '100%', minHeight: '38px', borderRadius: 2,
                         bgcolor: isFull ? '#4caf50' : '#ef5350',
-                        cursor: selectedUserId ? (isAlreadyAssigned || isFull ? 'not-allowed' : 'cell') : 'pointer',
+                        cursor: selectedUserId ? (isAlreadyAssigned ? 'pointer' : (isFull ? 'not-allowed' : 'cell')) : 'pointer',
                         display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
                         color: 'white', px: 0.5, py: 0.5, position: 'relative', overflow: 'hidden', zIndex: 1,
                         transition: 'transform 0.1s', '&:hover': { transform: 'scale(1.02)' }
@@ -195,7 +205,8 @@ const PlannerGrid: React.FC<Props> = ({ hierarchy, scheduleData, users, selected
                                         let dynamicBackground = undefined;
 
                                         if (selectedUser) {
-                                            const isQualified = selectedUser.qualifiedStationIds?.includes(stat.id);
+                                            // OPRAVA: Pokud nevyžaduje kvalifikaci, je automaticky "kvalifikován" a nesvítí oranžově
+                                            const isQualified = !stat.needsQualification || selectedUser.qualifiedStationIds?.includes(stat.id);
                                             const avail = selectedUser.weekAvailability?.[day.date];
 
                                             // Zjistíme, jestli a kdy vybraný brigádník dnes pracuje (na libovolném stanovišti)

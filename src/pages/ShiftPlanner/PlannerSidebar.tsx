@@ -3,9 +3,8 @@
 import React, { useState, useMemo } from 'react';
 import {
     Box, Typography, Paper, Avatar, List, ListItem, ListItemAvatar,
-    ListItemText, ListItemButton, Tabs, Tab, Button, IconButton, Tooltip
+    ListItemText, ListItemButton, Tabs, Tab, Button
 } from '@mui/material';
-import SettingsIcon from '@mui/icons-material/Settings';
 import type {
     PlannerUser,
     WeeklyScheduleResponse,
@@ -23,12 +22,11 @@ interface SidebarProps {
     viewMode: 'week' | 'day';
     selectedDate: string;
     onAutoPlan?: () => void;
-    onOpenAutoPlanSettings?: () => void;
 }
 
 const PlannerSidebar: React.FC<SidebarProps> = ({
                                                     users, selectedUserId, onSelectUser, shifts, viewMode, selectedDate,
-                                                    onAutoPlan, onOpenAutoPlanSettings
+                                                    onAutoPlan
                                                 }) => {
     const [tabIndex, setTabIndex] = useState(0);
 
@@ -178,36 +176,23 @@ const PlannerSidebar: React.FC<SidebarProps> = ({
                 })}
             </List>
 
-            <Box sx={{ p: 2, borderTop: '1px solid #eee', bgcolor: '#fafafa', display: 'flex', gap: 1 }}>
+            <Box sx={{ p: 2, borderTop: '1px solid #eee', bgcolor: '#fafafa', display: 'flex' }}>
                 <Button
                     variant="contained"
                     onClick={onAutoPlan}
+                    fullWidth
                     sx={{
-                        flexGrow: 1,
                         bgcolor: '#ff9800',
                         color: 'white',
                         fontWeight: 'bold',
                         textTransform: 'none',
                         borderRadius: 2,
-                        py: 1,
+                        py: 1.5,
                         '&:hover': { bgcolor: '#e68a00' }
                     }}
                 >
                     ✨ Automaticky obsadit
                 </Button>
-                <Tooltip title="Nastavení algoritmu">
-                    <IconButton
-                        onClick={onOpenAutoPlanSettings}
-                        sx={{
-                            bgcolor: '#e0e0e0',
-                            color: '#3e3535',
-                            borderRadius: 2,
-                            '&:hover': { bgcolor: '#d5d5d5' }
-                        }}
-                    >
-                        <SettingsIcon />
-                    </IconButton>
-                </Tooltip>
             </Box>
         </Paper>
     );

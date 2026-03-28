@@ -19,7 +19,7 @@ import DailyPlannerGrid from './DailyPlannerGrid';
 import CopyWeekModal, { type CopyFormValues } from './modals/CopyWeekModal';
 import GenerateShiftsModal, { type GenerateFormValues } from './modals/GenerateShiftsModal';
 import ShiftDetailModal from './modals/ShiftDetailModal';
-import AutoPlanModal, { type AutoPlanConfig } from './modals/AutoPlanModal'; // <--- NOVÝ IMPORT
+import AutoPlanModal, { type AutoPlanConfig } from './modals/AutoPlanModal';
 
 const formatDateLocal = (d: Date) => {
     const year = d.getFullYear();
@@ -64,15 +64,27 @@ export const ShiftPlanner = () => {
     const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
     const [selectedShiftForDetail, setSelectedShiftForDetail] = useState<ScheduleShift | null>(null);
 
-    const allStations = useMemo(() => {
-        if (!hierarchy) return [];
-        return hierarchy.categories.flatMap(cat => cat.stations);
+    // <--- PŘIDÁNO: Profiltrujeme celou hierarchii a necháme jen aktivní věci --->
+    const activeHierarchy = useMemo(() => {
+        if (!hierarchy) return null;
+        return {
+            categories: hierarchy.categories
+                .filter(cat => cat.isActive !== false) // Zrušíme skryté kategorie
+                .map(cat => ({
+                    ...cat,
+                    stations: cat.stations.filter(stat => stat.isActive !== false) // Zrušíme skrytá stanoviště
+                }))
+        };
     }, [hierarchy]);
 
-    // Stav pro aktuálně vybraný den v denním zobrazení
+    // Používáme novou profiltrovanou hierarchii
+    const allStations = useMemo(() => {
+        if (!activeHierarchy) return [];
+        return activeHierarchy.categories.flatMap(cat => cat.stations);
+    }, [activeHierarchy]);
+
     const [selectedDate, setSelectedDate] = useState<string>(currentWeekStart);
 
-    // Když se změní týden (tlačítka doleva/doprava), chceme zresetovat selectedDate na pondělí nového týdne
     useEffect(() => {
         setSelectedDate(currentWeekStart);
     }, [currentWeekStart]);
@@ -80,7 +92,7 @@ export const ShiftPlanner = () => {
     const [isGenerateModalOpen, setIsGenerateModalOpen] = useState(false);
     const [isCopyModalOpen, setIsCopyModalOpen] = useState(false);
     const [isClearModalOpen, setIsClearModalOpen] = useState(false);
-    const [isAutoPlanModalOpen, setIsAutoPlanModalOpen] = useState(false); // <--- STAV PRO NOVÝ MODAL
+    const [isAutoPlanModalOpen, setIsAutoPlanModalOpen] = useState(false);
 
     const loadData = useCallback(async () => {
         setIsLoading(true);
@@ -184,11 +196,6 @@ export const ShiftPlanner = () => {
         }
     };
 
-    // <--- FUNKCE PRO ZAVOLÁNÍ ALGORITMU --->
-    // src/components/shifts/Planner/ShiftPlanner.tsx
-
-    // src/components/shifts/Planner/ShiftPlanner.tsx
-
     const handleAutoPlanConfirm = async (config: AutoPlanConfig) => {
         try {
             setIsLoading(true);
@@ -197,9 +204,9 @@ export const ShiftPlanner = () => {
                 fairnessWeight: config.fairnessWeight,
                 trainingWeight: config.trainingWeight,
                 targetDate: config.targetDate,
-                // PŘIDÁNO: Posíláme hranice aktuálně zobrazeného týdne
                 startDate: currentWeekStart,
-                endDate: endDate
+                endDate: endDate,
+                categoryId: selectedCategory === 'all' ? undefined : selectedCategory
             });
 
             await loadData();
@@ -303,8 +310,7 @@ export const ShiftPlanner = () => {
                 shifts={scheduleData?.shifts || []}
                 viewMode={viewMode}
                 selectedDate={selectedDate}
-                onAutoPlan={() => setIsAutoPlanModalOpen(true)} // <--- NAPOJENO NA MODAL
-                onOpenAutoPlanSettings={() => setIsAutoPlanModalOpen(true)} // <--- NAPOJENO NA MODAL
+                onAutoPlan={() => setIsAutoPlanModalOpen(true)}
             />
 
             <Box sx={{
@@ -344,9 +350,10 @@ export const ShiftPlanner = () => {
 
                     <FormControl size="small" sx={{ minWidth: 140 }}>
                         <InputLabel>Hlavní typ</InputLabel>
+                        {/* OPRAVA: V Dropdownu jsou jen aktivní kategorie */}
                         <Select value={selectedCategory} label="Hlavní typ" onChange={handleCategoryChange} sx={{ borderRadius: 2, height: 32 }}>
                             <MenuItem value="all">Všechny typy</MenuItem>
-                            {hierarchy?.categories.map((cat) => (
+                            {activeHierarchy?.categories.map((cat) => (
                                 <MenuItem key={cat.id} value={cat.id}>{cat.name}</MenuItem>
                             ))}
                         </Select>
@@ -372,7 +379,6 @@ export const ShiftPlanner = () => {
                     </Box>
                 </Paper>
 
-                {/* PŘEPÍNAČ DNŮ (Zobrazí se jen v denním zobrazení) */}
                 {viewMode === 'day' && scheduleData?.days && (
                     <Paper elevation={0} sx={{ display: 'flex', mb: 1, borderRadius: 2, overflow: 'hidden', border: '1px solid rgba(0,0,0,0.1)', flexShrink: 0 }}>
                         {scheduleData.days.map((day) => {
@@ -409,37 +415,42 @@ export const ShiftPlanner = () => {
                 }}>
                     {viewMode === 'week' ? (
                         <PlannerGrid
+                            // OPRAVA: Mřížce posíláme jen aktivní data
                             hierarchy={selectedCategory === 'all'
-                                ? hierarchy
-                                : hierarchy ? { categories: hierarchy.categories.filter(c => c.id === selectedCategory) } : null
+                                ? activeHierarchy
+                                : activeHierarchy ? { categories: activeHierarchy.categories.filter(c => c.id === selectedCategory) } : null
                             }
                             scheduleData={scheduleData}
                             users={availableUsers}
                             selectedUserId={selectedUserId}
                             onAssignUser={handleAssignUser}
+                            onRemoveUser={handleRemoveUser}
                             onShiftClick={(shift) => setSelectedShiftForDetail(shift)}
                         />
                     ) : (
                         <DailyPlannerGrid
+                            // OPRAVA: Mřížce posíláme jen aktivní data
                             hierarchy={selectedCategory === 'all'
-                                ? hierarchy
-                                : hierarchy ? { categories: hierarchy.categories.filter(c => c.id === selectedCategory) } : null
+                                ? activeHierarchy
+                                : activeHierarchy ? { categories: activeHierarchy.categories.filter(c => c.id === selectedCategory) } : null
                             }
                             scheduleData={scheduleData}
                             users={availableUsers}
                             selectedUserId={selectedUserId}
                             selectedDate={selectedDate}
                             onAssignUser={handleAssignUser}
+                            onRemoveUser={handleRemoveUser}
                             onShiftClick={(shift) => setSelectedShiftForDetail(shift)}
                         />
                     )}
                 </Box>
 
+                {/* OPRAVA: V modalu Generování se už taky skryté věci neobjeví */}
                 <GenerateShiftsModal
                     open={isGenerateModalOpen}
                     onClose={() => setIsGenerateModalOpen(false)}
                     onConfirm={handleGenerateConfirm}
-                    hierarchy={hierarchy}
+                    hierarchy={activeHierarchy}
                     currentWeekStart={currentWeekStart}
                     currentWeekEnd={endDate}
                 />
@@ -482,7 +493,6 @@ export const ShiftPlanner = () => {
                     onDeleteShift={handleDeleteShift}
                 />
 
-                {/* <--- NOVÝ MODAL PRO AUTO-PLÁNOVÁNÍ ---> */}
                 <AutoPlanModal
                     open={isAutoPlanModalOpen}
                     onClose={() => setIsAutoPlanModalOpen(false)}

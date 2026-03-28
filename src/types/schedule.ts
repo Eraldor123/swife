@@ -61,6 +61,7 @@ export interface PlannerUser {
 export interface HierarchyTemplate {
     id: number;
     name: string;
+    isActive: boolean; // <--- PŘIDÁNO
 }
 
 /**
@@ -70,6 +71,7 @@ export interface HierarchyStation {
     id: number;
     name: string;
     needsQualification: boolean;
+    isActive: boolean; // <--- PŘIDÁNO
     templates: HierarchyTemplate[];
 }
 
@@ -79,7 +81,8 @@ export interface HierarchyStation {
 export interface HierarchyCategory {
     id: number;
     name: string;
-    color: string | null; // <--- DOPLNĚNO, aby fungovalo podbarvení
+    color: string | null;
+    isActive: boolean; // <--- PŘIDÁNO
     stations: HierarchyStation[];
 }
 

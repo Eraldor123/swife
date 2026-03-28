@@ -1,17 +1,15 @@
-// src/services/ScheduleService.ts
-
 import axios from 'axios';
 import type { WeeklyScheduleResponse, PlannerUser } from '../types/schedule';
 
 const API_URL = 'http://localhost:8080/api/v1/schedule';
 
-// 1. PŘIDÁNO: Definice typu pro požadavek (odpovídá AutoPlanRequestDto v Javě)
 export interface AutoPlanRequest {
     fairnessWeight: number;
     trainingWeight: number;
     startDate?: string;
     endDate?: string;
     targetDate?: string;
+    categoryId?: number; // <--- PŘIDÁNO
 }
 
 const getAuthHeader = () => {
@@ -22,8 +20,6 @@ const getAuthHeader = () => {
 };
 
 export const ScheduleService = {
-    // ... ostatní metody zůstávají stejné ...
-
     getWeeklySchedule: async (startDate: string, endDate: string): Promise<WeeklyScheduleResponse> => {
         const response = await axios.get(`${API_URL}/week-view`, {
             params: { startDate, endDate },
@@ -100,7 +96,6 @@ export const ScheduleService = {
         await axios.delete(`http://localhost:8080/api/v1/shifts/${shiftId}`, getAuthHeader());
     },
 
-    // 2. OPRAVENO: any nahrazeno za AutoPlanRequest a návratový typ na Promise<void>
     runAutoPlan: async (config: AutoPlanRequest): Promise<void> => {
         await axios.post(`${API_URL}/auto-plan`, config, getAuthHeader());
     }
