@@ -1,13 +1,29 @@
+// src/services/ScheduleService.ts
+
 import axios from 'axios';
 import type { WeeklyScheduleResponse, PlannerUser } from '../types/schedule';
 
 const API_URL = 'http://localhost:8080/api/v1/schedule';
 
-const getAuthHeader = () => ({
-    headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
-});
+// 1. PŘIDÁNO: Definice typu pro požadavek (odpovídá AutoPlanRequestDto v Javě)
+export interface AutoPlanRequest {
+    fairnessWeight: number;
+    trainingWeight: number;
+    startDate?: string;
+    endDate?: string;
+    targetDate?: string;
+}
+
+const getAuthHeader = () => {
+    const token = localStorage.getItem('token');
+    return {
+        headers: { 'Authorization': `Bearer ${token}` }
+    };
+};
 
 export const ScheduleService = {
+    // ... ostatní metody zůstávají stejné ...
+
     getWeeklySchedule: async (startDate: string, endDate: string): Promise<WeeklyScheduleResponse> => {
         const response = await axios.get(`${API_URL}/week-view`, {
             params: { startDate, endDate },
@@ -49,46 +65,43 @@ export const ScheduleService = {
             ...getAuthHeader()
         });
     },
+
     removeUserFromShift: async (shiftId: string, userId: string): Promise<void> => {
         await axios.delete(`http://localhost:8080/api/v1/shift-assignments`, {
             params: { shiftId, userId },
             ...getAuthHeader()
         });
     },
-    // Tato metoda chybí a způsobuje tu chybu v ShiftPlanneru
+
     updateShift: async (shiftId: string, data: { startTime: string; endTime: string; requiredCapacity: number; description?: string }): Promise<void> => {
-        const token = localStorage.getItem('token');
-        await axios.put(`http://localhost:8080/api/v1/shifts/${shiftId}`, data, {
-            headers: { 'Authorization': `Bearer ${token}` }
-        });
+        await axios.put(`http://localhost:8080/api/v1/shifts/${shiftId}`, data, getAuthHeader());
     },
-    // ... tvoje předchozí metody, např. updateShift ...
 
     splitShift: async (shiftId: string): Promise<void> => {
-        const token = localStorage.getItem('token');
-        await axios.post(`http://localhost:8080/api/v1/shifts/${shiftId}/split`, {}, {
-            headers: { 'Authorization': `Bearer ${token}` }
-        });
+        await axios.post(`http://localhost:8080/api/v1/shifts/${shiftId}/split`, {}, getAuthHeader());
     },
-    generateCustomShifts: async (data: {
-        stationId: number; startDate: string; endDate: string;
-        startTime?: string; endTime?: string; requiredCapacity: number;
-        useOpeningHours?: boolean; hasDopo?: boolean; hasOdpo?: boolean;
-        description?: string; // <--- NOVÉ
-    }): Promise<void> => {
-        const token = localStorage.getItem('token');
-        await axios.post(`http://localhost:8080/api/v1/shift-generation/custom`, data, {
-            headers: { 'Authorization': `Bearer ${token}` }
-        });
-    },
-    // src/services/ScheduleService.ts
-    async deleteShift(shiftId: string): Promise<void> {
-        const token = localStorage.getItem('token');
-        await fetch(`http://localhost:8080/api/v1/shifts/${shiftId}`, {
-            method: 'DELETE',
-            headers: { 'Authorization': `Bearer ${token}` }
-        });
-    }
 
-    // ... další metody, pokud tam nějaké jsou ...
+    generateCustomShifts: async (data: {
+        stationId: number;
+        startDate: string;
+        endDate: string;
+        startTime?: string;
+        endTime?: string;
+        requiredCapacity: number;
+        useOpeningHours?: boolean;
+        hasDopo?: boolean;
+        hasOdpo?: boolean;
+        description?: string;
+    }): Promise<void> => {
+        await axios.post(`http://localhost:8080/api/v1/shift-generation/custom`, data, getAuthHeader());
+    },
+
+    deleteShift: async (shiftId: string): Promise<void> => {
+        await axios.delete(`http://localhost:8080/api/v1/shifts/${shiftId}`, getAuthHeader());
+    },
+
+    // 2. OPRAVENO: any nahrazeno za AutoPlanRequest a návratový typ na Promise<void>
+    runAutoPlan: async (config: AutoPlanRequest): Promise<void> => {
+        await axios.post(`${API_URL}/auto-plan`, config, getAuthHeader());
+    }
 };

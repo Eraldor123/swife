@@ -1,3 +1,5 @@
+// src/components/shifts/Planner/PlannerGrid.tsx
+
 import React from 'react';
 import { Box, Typography, Paper, Tooltip } from '@mui/material';
 import type {
@@ -56,7 +58,9 @@ const PlannerGrid: React.FC<Props> = ({ hierarchy, scheduleData, users, selected
                 const areaMorningEnd = dayConfig.dopoEnd?.substring(0, 5);
                 const areaAfternoonStart = dayConfig.odpoStart?.substring(0, 5);
                 const areaAfternoonEnd = dayConfig.odpoEnd?.substring(0, 5);
-                if (!((sTime === areaMorningStart && eTime === areaMorningEnd) || (sTime === areaAfternoonStart && eTime === areaAfternoonEnd))) {
+                const isStandardMorning = sTime === areaMorningStart && eTime === areaMorningEnd;
+                const isStandardAfternoon = sTime === areaAfternoonStart && eTime === areaAfternoonEnd;
+                if (!isStandardMorning && !isStandardAfternoon) {
                     uniqueCustomRanges.add(`${sTime}-${eTime}`);
                 }
             }
@@ -68,29 +72,57 @@ const PlannerGrid: React.FC<Props> = ({ hierarchy, scheduleData, users, selected
         const assignedCount = shift.assignedUsers?.length || 0;
         const isFull = assignedCount >= shift.requiredCapacity;
         const isAlreadyAssigned = selectedUserId && shift.assignedUsers?.some((u: AssignedUser) => u.userId === selectedUserId);
-        const assignedSurnames = shift.assignedUsers?.map((u: AssignedUser) => getSurname(u.name)) || [];
+
+        const assignedData = shift.assignedUsers?.map((u: AssignedUser) => {
+            const surname = getSurname(u.name);
+            const fullUserObj = users.find(user => user.userId === u.userId);
+            const isUnqualified = fullUserObj ? !fullUserObj.qualifiedStationIds?.includes(shift.stationId) : false;
+            return { surname, name: u.name, isUnqualified };
+        }) || [];
 
         return (
             <Tooltip key={shift.id} arrow title={
                 <Box sx={{ p: 1, fontSize: '0.75rem' }}>
                     <Typography variant="caption" sx={{ fontWeight: 'bold', display: 'block', mb: 0.5 }}>
-                        {shift.assignedUsers?.length > 0 ? shift.assignedUsers.map(u => u.name).join(', ') : 'Žádný zaměstnanec'}
+                        {assignedData.length > 0
+                            ? assignedData.map(u => u.isUnqualified ? `${u.name} ⚠️ (Zaučení)` : u.name).join(', ')
+                            : 'Žádný zaměstnanec'}
                     </Typography>
                     <Typography variant="body2">Čas: {shift.startTime?.substring(11, 16)} — {shift.endTime?.substring(11, 16)}</Typography>
+                    {shift.description && (
+                        <Typography variant="body2" sx={{ color: '#ffb74d', mt: 0.5, fontWeight: 'bold' }}>📝 {shift.description}</Typography>
+                    )}
                 </Box>
             }>
-                <Box onClick={() => selectedUserId ? (!isAlreadyAssigned && !isFull && onAssignUser(shift.id)) : onShiftClick(shift)}
-                     sx={{
-                         width: '100%', minHeight: '38px', borderRadius: 2,
-                         bgcolor: isFull ? '#4caf50' : '#ef5350',
-                         cursor: selectedUserId ? (isAlreadyAssigned || isFull ? 'not-allowed' : 'cell') : 'pointer',
-                         display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
-                         color: 'white', px: 0.5, py: 0.5, position: 'relative', overflow: 'hidden', zIndex: 1
-                     }}>
-                    {assignedSurnames.slice(0, 2).map((surname, idx) => (
-                        <Typography key={idx} sx={{ fontSize: '0.65rem', fontWeight: 'bold', textAlign: 'center', width: '100%', overflow: 'hidden' }}>{surname}</Typography>
+                <Box
+                    onClick={() => {
+                        if (selectedUserId) {
+                            if (!isAlreadyAssigned && !isFull) onAssignUser(shift.id);
+                        } else {
+                            onShiftClick(shift);
+                        }
+                    }}
+                    sx={{
+                        width: '100%', minHeight: '38px', borderRadius: 2,
+                        bgcolor: isFull ? '#4caf50' : '#ef5350',
+                        cursor: selectedUserId ? (isAlreadyAssigned || isFull ? 'not-allowed' : 'cell') : 'pointer',
+                        display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+                        color: 'white', px: 0.5, py: 0.5, position: 'relative', overflow: 'hidden', zIndex: 1,
+                        transition: 'transform 0.1s', '&:hover': { transform: 'scale(1.02)' }
+                    }}
+                >
+                    {assignedData.slice(0, 2).map((userObj, idx) => (
+                        <Typography key={idx} sx={{
+                            fontSize: '0.65rem', fontWeight: 'bold', textAlign: 'center', width: '100%', overflow: 'hidden',
+                            color: userObj.isUnqualified ? '#ffeb3b' : 'white',
+                            textShadow: userObj.isUnqualified ? '0px 0px 3px rgba(0,0,0,0.8)' : 'none'
+                        }}>
+                            {userObj.surname} {userObj.isUnqualified && '⚠️'}
+                        </Typography>
                     ))}
-                    <Typography sx={{ fontSize: '0.6rem', position: 'absolute', bottom: 1, right: 3, opacity: 0.8 }}>[{assignedCount}/{shift.requiredCapacity}]</Typography>
+                    <Typography sx={{ fontSize: '0.6rem', position: 'absolute', bottom: 1, right: 3, opacity: 0.8 }}>
+                        [{assignedCount}/{shift.requiredCapacity}]
+                    </Typography>
                 </Box>
             </Tooltip>
         );
@@ -98,39 +130,38 @@ const PlannerGrid: React.FC<Props> = ({ hierarchy, scheduleData, users, selected
 
     return (
         <Paper elevation={0} sx={{
-            // KLÍČ K ODSTRANĚNÍ SCROLLBARU: Mřížka vyplní kontejner a nepustí scroll ven
-            position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
-            overflow: 'auto', borderRadius: 4, bgcolor: 'white', border: '1px solid rgba(0,0,0,0.1)'
+            borderRadius: 4, bgcolor: 'white',
+            position: 'absolute', inset: 0, overflow: 'auto',
+            border: '1px solid rgba(0,0,0,0.1)'
         }}>
             <style>{`
-                /* VÝRAZNĚJŠÍ BARVY PRO HEAT MAPU */
-                .highlight-green { background-color: rgba(76, 175, 80, 0.5) !important; }  /* Má čas i kvalifikaci */
-                .highlight-orange { background-color: rgba(255, 152, 0, 0.5) !important; } /* Má čas, nemá kvalifikaci */
-                .highlight-red { background-color: rgba(244, 67, 54, 0.4) !important; }     /* Nemá čas */
+                .highlight-booked { 
+                    background: repeating-linear-gradient(45deg, rgba(0,0,0,0.02), rgba(0,0,0,0.02) 10px, rgba(0,0,0,0.08) 10px, rgba(0,0,0,0.08) 20px) !important; 
+                }
             `}</style>
 
             <Box sx={{ display: 'grid', gridTemplateColumns: `180px repeat(${daysCount * 2}, minmax(60px, 1fr)) 180px` }}>
-                <Box sx={{ p: 2, fontWeight: 'bold', borderBottom: '2px solid #f0f0f0', bgcolor: '#fafafa', position: 'sticky', top: 0, zIndex: 10 }}>Stanoviště</Box>
+                <Box sx={{ p: 2, fontWeight: 'bold', borderBottom: '2px solid #f0f0f0', bgcolor: '#fafafa', display: 'flex', alignItems: 'center', position: 'sticky', top: 0, zIndex: 10 }}>Stanoviště</Box>
                 {scheduleData.days.map((day: DailyHours, idx: number) => {
                     const formatted = formatDateShort(day.date);
                     return (
                         <Box key={idx} sx={{ gridColumn: 'span 2', borderBottom: '2px solid #f0f0f0', borderLeft: '1px solid #f0f0f0', bgcolor: '#fafafa', position: 'sticky', top: 0, zIndex: 10 }}>
                             <Box sx={{ textAlign: 'center', py: 1 }}>
-                                <Typography variant="caption" sx={{ fontWeight: 'bold', display: 'block' }}>{formatted.dayName}</Typography>
-                                <Typography variant="body2" sx={{ fontWeight: 'bold' }}>{formatted.date}</Typography>
+                                <Typography variant="caption" sx={{ fontWeight: 'bold', color: '#3e3535', display: 'block' }}>{formatted.dayName}</Typography>
+                                <Typography variant="body2" sx={{ fontWeight: 'bold', color: '#3e3535' }}>{formatted.date}</Typography>
                             </Box>
-                            <Box sx={{ display: 'flex', bgcolor: '#e3f2fd', fontSize: '0.6rem', borderTop: '1px solid #f0f0f0' }}>
-                                <Box sx={{ flex: 1, textAlign: 'center', p: 0.5, borderRight: '1px solid #ddd' }}>{day.dopoStart?.substring(0,5)} - {day.dopoEnd?.substring(0,5)}</Box>
-                                <Box sx={{ flex: 1, textAlign: 'center', p: 0.5 }}>{day.odpoStart?.substring(0,5)} - {day.odpoEnd?.substring(0,5)}</Box>
+                            <Box sx={{ display: 'flex', bgcolor: '#e3f2fd', fontSize: '0.65rem', color: '#1976d2', borderTop: '1px solid #f0f0f0' }}>
+                                <Box sx={{ flex: 1, textAlign: 'center', p: 0.5, borderRight: '1px solid rgba(0,0,0,0.05)', fontWeight: 'bold' }}>{day.dopoStart?.substring(0,5)} - {day.dopoEnd?.substring(0,5)}</Box>
+                                <Box sx={{ flex: 1, textAlign: 'center', p: 0.5, fontWeight: 'bold' }}>{day.odpoStart?.substring(0,5)} - {day.odpoEnd?.substring(0,5)}</Box>
                             </Box>
                         </Box>
                     );
                 })}
-                <Box sx={{ p: 2, fontWeight: 'bold', borderBottom: '2px solid #f0f0f0', borderLeft: '1px solid #f0f0f0', bgcolor: '#fafafa', position: 'sticky', top: 0, zIndex: 10 }}>Stanoviště</Box>
+                <Box sx={{ p: 2, fontWeight: 'bold', borderBottom: '2px solid #f0f0f0', borderLeft: '1px solid #f0f0f0', bgcolor: '#fafafa', display: 'flex', alignItems: 'center', position: 'sticky', top: 0, zIndex: 10 }}>Stanoviště</Box>
 
                 {hierarchy.categories.map((cat: HierarchyCategory) => (
                     <React.Fragment key={cat.id}>
-                        <Box sx={{ gridColumn: '1 / -1', bgcolor: cat.color || '#f5f5f5', p: 1, pl: 3, fontWeight: 'bold', fontSize: '0.85rem', textTransform: 'uppercase', borderBottom: '1px solid #eee' }}>
+                        <Box sx={{ gridColumn: '1 / -1', bgcolor: cat.color || '#f5f5f5', p: 1, pl: 3, fontWeight: 'bold', color: '#3e3535', fontSize: '0.85rem', textTransform: 'uppercase', borderBottom: '1px solid #eee' }}>
                             {cat.name}
                         </Box>
 
@@ -138,8 +169,8 @@ const PlannerGrid: React.FC<Props> = ({ hierarchy, scheduleData, users, selected
                             const customTimes = getStationCustomTimes(stat.id);
                             const StationLabel = (
                                 <Box sx={{ borderRight: '1px solid #eee', borderLeft: '1px solid #eee', borderBottom: '1px solid #eee', p: 1.5, display: 'flex', flexDirection: 'column', justifyContent: 'center', bgcolor: 'white' }}>
-                                    <Typography sx={{ fontSize: '0.8rem', fontWeight: 600 }}>{stat.name}</Typography>
-                                    {customTimes && <Typography sx={{ fontSize: '0.6rem', color: '#d32f2f', fontWeight: 'bold' }}>({customTimes})</Typography>}
+                                    <Typography sx={{ fontSize: '0.8rem', fontWeight: 600, color: '#444' }}>{stat.name}</Typography>
+                                    {customTimes && <Typography sx={{ fontSize: '0.65rem', color: '#d32f2f', fontWeight: 'bold', mt: 0.5 }}>({customTimes})</Typography>}
                                 </Box>
                             );
 
@@ -160,23 +191,73 @@ const PlannerGrid: React.FC<Props> = ({ hierarchy, scheduleData, users, selected
                                             else morningShifts.push(s);
                                         });
 
-                                        // --- OPRAVENÁ LOGIKA BAREV ---
                                         let highlightClass = '';
+                                        let dynamicBackground = undefined;
+
                                         if (selectedUser) {
                                             const isQualified = selectedUser.qualifiedStationIds?.includes(stat.id);
-                                            const avail = selectedUser.weekAvailability?.[day.date]; // např. "CELÝ DEN"
+                                            const avail = selectedUser.weekAvailability?.[day.date];
 
-                                            if (!avail) {
-                                                highlightClass = 'highlight-red'; // Nemá čas vůbec
-                                            } else if (isQualified) {
-                                                highlightClass = 'highlight-green'; // Má čas I kvalifikaci
+                                            // Zjistíme, jestli a kdy vybraný brigádník dnes pracuje (na libovolném stanovišti)
+                                            const userShiftsToday = scheduleData.shifts?.filter(s =>
+                                                s.shiftDate === day.date &&
+                                                s.assignedUsers.some(au => au.userId === selectedUser.userId)
+                                            ) || [];
+
+                                            let hasMorning = false;
+                                            let hasAfternoon = false;
+
+                                            userShiftsToday.forEach(s => {
+                                                const startH = parseInt(s.startTime?.substring(11, 13) || '0', 10);
+                                                const endH = parseInt(s.endTime?.substring(11, 13) || '0', 10);
+                                                if (startH < 12 && endH >= 15) { hasMorning = true; hasAfternoon = true; }
+                                                else if (startH >= 12) { hasAfternoon = true; }
+                                                else { hasMorning = true; }
+                                            });
+
+                                            let morningStatus = 'red';
+                                            let afternoonStatus = 'red';
+
+                                            // Logika pro ráno
+                                            if (avail === 'CELÝ DEN' || avail === 'DOP') {
+                                                if (hasMorning) morningStatus = 'booked';
+                                                else morningStatus = isQualified ? 'green' : 'orange';
+                                            }
+
+                                            // Logika pro odpoledne
+                                            if (avail === 'CELÝ DEN' || avail === 'ODP') {
+                                                if (hasAfternoon) afternoonStatus = 'booked';
+                                                else afternoonStatus = isQualified ? 'green' : 'orange';
+                                            }
+
+                                            // Převodník stavů na barvy
+                                            const getColor = (status: string) => {
+                                                if (status === 'green') return 'rgba(76, 175, 80, 0.4)';
+                                                if (status === 'orange') return 'rgba(255, 152, 0, 0.4)';
+                                                if (status === 'red') return 'rgba(244, 67, 54, 0.2)';
+                                                if (status === 'booked') return 'rgba(0, 0, 0, 0.08)'; // Šedá = obsazeno
+                                                return 'transparent';
+                                            };
+
+                                            if (morningStatus === afternoonStatus) {
+                                                // Obě poloviny dne jsou stejné (např. volný celý den)
+                                                if (morningStatus === 'booked') {
+                                                    highlightClass = 'highlight-booked'; // Pokud je plně obsazen, dáme šrafování
+                                                } else {
+                                                    dynamicBackground = getColor(morningStatus);
+                                                }
                                             } else {
-                                                highlightClass = 'highlight-orange'; // Má čas ALE NEMÁ kvalifikaci
+                                                // Rozpůlená barva
+                                                dynamicBackground = `linear-gradient(to right, ${getColor(morningStatus)} 50%, ${getColor(afternoonStatus)} 50%)`;
                                             }
                                         }
 
                                         return (
-                                            <Box key={`${stat.id}-${day.date}`} className={highlightClass} sx={{ gridColumn: 'span 2', borderRight: '1px solid #eee', borderBottom: '1px solid #eee', p: 0.4, display: 'flex', flexDirection: 'column', gap: 0.5, position: 'relative', minHeight: '48px' }}>
+                                            <Box key={`${stat.id}-${day.date}`} className={highlightClass} sx={{
+                                                gridColumn: 'span 2', borderRight: '1px solid #eee', borderBottom: '1px solid #eee', p: 0.4,
+                                                display: 'flex', flexDirection: 'column', gap: 0.5, position: 'relative', minHeight: '48px',
+                                                background: dynamicBackground // Aplikujeme půlenou nebo pevnou barvu
+                                            }}>
                                                 <Box sx={{ position: 'absolute', top: 0, bottom: 0, left: '50%', borderLeft: '1px dashed #eee', zIndex: 0 }} />
                                                 {fullDayShifts.map(s => <Box key={s.id} sx={{ zIndex: 1 }}>{renderShiftPill(s)}</Box>)}
                                                 {(morningShifts.length > 0 || afternoonShifts.length > 0) && (

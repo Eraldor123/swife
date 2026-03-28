@@ -15,9 +15,11 @@ import type { WeeklyScheduleResponse, PlannerUser, HierarchyData, ScheduleShift 
 
 import PlannerSidebar from './PlannerSidebar';
 import PlannerGrid from './PlannerGrid';
+import DailyPlannerGrid from './DailyPlannerGrid';
 import CopyWeekModal, { type CopyFormValues } from './modals/CopyWeekModal';
 import GenerateShiftsModal, { type GenerateFormValues } from './modals/GenerateShiftsModal';
 import ShiftDetailModal from './modals/ShiftDetailModal';
+import AutoPlanModal, { type AutoPlanConfig } from './modals/AutoPlanModal'; // <--- NOVÝ IMPORT
 
 const formatDateLocal = (d: Date) => {
     const year = d.getFullYear();
@@ -67,9 +69,18 @@ export const ShiftPlanner = () => {
         return hierarchy.categories.flatMap(cat => cat.stations);
     }, [hierarchy]);
 
+    // Stav pro aktuálně vybraný den v denním zobrazení
+    const [selectedDate, setSelectedDate] = useState<string>(currentWeekStart);
+
+    // Když se změní týden (tlačítka doleva/doprava), chceme zresetovat selectedDate na pondělí nového týdne
+    useEffect(() => {
+        setSelectedDate(currentWeekStart);
+    }, [currentWeekStart]);
+
     const [isGenerateModalOpen, setIsGenerateModalOpen] = useState(false);
     const [isCopyModalOpen, setIsCopyModalOpen] = useState(false);
     const [isClearModalOpen, setIsClearModalOpen] = useState(false);
+    const [isAutoPlanModalOpen, setIsAutoPlanModalOpen] = useState(false); // <--- STAV PRO NOVÝ MODAL
 
     const loadData = useCallback(async () => {
         setIsLoading(true);
@@ -109,7 +120,7 @@ export const ShiftPlanner = () => {
                             startDate: data.startDate,
                             endDate: data.endDate,
                             startTime: data.dopoStartTime,
-                            endTime: data.dopoEndTime, // OPRAVENO: Byl tu překlep EndStartTime
+                            endTime: data.dopoEndTime,
                             requiredCapacity: data.capacity!,
                             useOpeningHours: false,
                             description: data.description
@@ -170,6 +181,33 @@ export const ShiftPlanner = () => {
         } catch (error) {
             console.error("Chyba při mazání týdne:", error);
             alert("Nepodařilo se vyčistit týden.");
+        }
+    };
+
+    // <--- FUNKCE PRO ZAVOLÁNÍ ALGORITMU --->
+    // src/components/shifts/Planner/ShiftPlanner.tsx
+
+    // src/components/shifts/Planner/ShiftPlanner.tsx
+
+    const handleAutoPlanConfirm = async (config: AutoPlanConfig) => {
+        try {
+            setIsLoading(true);
+
+            await ScheduleService.runAutoPlan({
+                fairnessWeight: config.fairnessWeight,
+                trainingWeight: config.trainingWeight,
+                targetDate: config.targetDate,
+                // PŘIDÁNO: Posíláme hranice aktuálně zobrazeného týdne
+                startDate: currentWeekStart,
+                endDate: endDate
+            });
+
+            await loadData();
+            setIsAutoPlanModalOpen(false);
+        } catch (error) {
+            console.error("Chyba algoritmu:", error);
+        } finally {
+            setIsLoading(false);
         }
     };
 
@@ -262,6 +300,11 @@ export const ShiftPlanner = () => {
                 onSelectUser={setSelectedUserId}
                 currentWeekDays={scheduleData?.days || []}
                 allStations={allStations}
+                shifts={scheduleData?.shifts || []}
+                viewMode={viewMode}
+                selectedDate={selectedDate}
+                onAutoPlan={() => setIsAutoPlanModalOpen(true)} // <--- NAPOJENO NA MODAL
+                onOpenAutoPlanSettings={() => setIsAutoPlanModalOpen(true)} // <--- NAPOJENO NA MODAL
             />
 
             <Box sx={{
@@ -275,7 +318,7 @@ export const ShiftPlanner = () => {
 
                 <Paper elevation={0} sx={{
                     display: 'flex', flexDirection: 'row', alignItems: 'center', gap: 1.5,
-                    mb: 2, p: 1, bgcolor: 'white', borderRadius: 3, boxShadow: '0 2px 8px rgba(0,0,0,0.05)', whiteSpace: 'nowrap',
+                    mb: 1, p: 1, bgcolor: 'white', borderRadius: 3, boxShadow: '0 2px 8px rgba(0,0,0,0.05)', whiteSpace: 'nowrap',
                     flexShrink: 0
                 }}>
                     <IconButton onClick={() => navigate('/dashboard/shifts')} size="small" sx={{ border: '1px solid #eee' }}>
@@ -329,23 +372,67 @@ export const ShiftPlanner = () => {
                     </Box>
                 </Paper>
 
+                {/* PŘEPÍNAČ DNŮ (Zobrazí se jen v denním zobrazení) */}
+                {viewMode === 'day' && scheduleData?.days && (
+                    <Paper elevation={0} sx={{ display: 'flex', mb: 1, borderRadius: 2, overflow: 'hidden', border: '1px solid rgba(0,0,0,0.1)', flexShrink: 0 }}>
+                        {scheduleData.days.map((day) => {
+                            const d = new Date(day.date);
+                            const dayName = ['Ne', 'Po', 'Út', 'St', 'Čt', 'Pá', 'So'][d.getDay()];
+                            const isSelected = selectedDate === day.date;
+                            return (
+                                <Button
+                                    key={day.date}
+                                    onClick={() => setSelectedDate(day.date)}
+                                    sx={{
+                                        flex: 1,
+                                        borderRadius: 0,
+                                        py: 0.5,
+                                        bgcolor: isSelected ? '#3e3535' : 'transparent',
+                                        color: isSelected ? 'white' : '#555',
+                                        fontWeight: isSelected ? 'bold' : 'normal',
+                                        borderRight: '1px solid #eee',
+                                        '&:hover': { bgcolor: isSelected ? '#3e3535' : '#f0f0f0' }
+                                    }}
+                                >
+                                    {dayName} {d.getDate()}.{d.getMonth() + 1}.
+                                </Button>
+                            );
+                        })}
+                    </Paper>
+                )}
+
                 <Box sx={{
                     flexGrow: 1,
                     position: 'relative',
                     width: '100%',
                     minHeight: 0
                 }}>
-                    <PlannerGrid
-                        hierarchy={selectedCategory === 'all'
-                            ? hierarchy
-                            : hierarchy ? { categories: hierarchy.categories.filter(c => c.id === selectedCategory) } : null
-                        }
-                        scheduleData={scheduleData}
-                        users={availableUsers}
-                        selectedUserId={selectedUserId}
-                        onAssignUser={handleAssignUser}
-                        onShiftClick={(shift) => setSelectedShiftForDetail(shift)}
-                    />
+                    {viewMode === 'week' ? (
+                        <PlannerGrid
+                            hierarchy={selectedCategory === 'all'
+                                ? hierarchy
+                                : hierarchy ? { categories: hierarchy.categories.filter(c => c.id === selectedCategory) } : null
+                            }
+                            scheduleData={scheduleData}
+                            users={availableUsers}
+                            selectedUserId={selectedUserId}
+                            onAssignUser={handleAssignUser}
+                            onShiftClick={(shift) => setSelectedShiftForDetail(shift)}
+                        />
+                    ) : (
+                        <DailyPlannerGrid
+                            hierarchy={selectedCategory === 'all'
+                                ? hierarchy
+                                : hierarchy ? { categories: hierarchy.categories.filter(c => c.id === selectedCategory) } : null
+                            }
+                            scheduleData={scheduleData}
+                            users={availableUsers}
+                            selectedUserId={selectedUserId}
+                            selectedDate={selectedDate}
+                            onAssignUser={handleAssignUser}
+                            onShiftClick={(shift) => setSelectedShiftForDetail(shift)}
+                        />
+                    )}
                 </Box>
 
                 <GenerateShiftsModal
@@ -392,7 +479,16 @@ export const ShiftPlanner = () => {
                     onRemoveUser={handleRemoveUser}
                     onUpdateShift={handleUpdateShift}
                     onSplitShift={handleSplitShift}
-                    onDeleteShift={handleDeleteShift} // <--- DOPLNĚNO
+                    onDeleteShift={handleDeleteShift}
+                />
+
+                {/* <--- NOVÝ MODAL PRO AUTO-PLÁNOVÁNÍ ---> */}
+                <AutoPlanModal
+                    open={isAutoPlanModalOpen}
+                    onClose={() => setIsAutoPlanModalOpen(false)}
+                    onConfirm={handleAutoPlanConfirm}
+                    viewMode={viewMode}
+                    selectedDate={selectedDate}
                 />
             </Box>
         </Box>
