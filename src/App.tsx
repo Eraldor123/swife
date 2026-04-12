@@ -13,6 +13,8 @@ import { AuthProvider, useAuth } from './context/AuthContext';
 import EmployeeQualificationsPage from './pages/EmployeeQualificationsPage';
 import ShiftPlanner from './pages/ShiftPlanner/ShiftPlanner';
 import AuditLogsPage from './pages/AuditLogsPage'; // PŘIDÁNO: Import pro Audit logy
+import RequestReset from "./pages/RequestReset.tsx";
+import ResetPassword from "./pages/ResetPassword.tsx";
 
 /**
  * VYLEPŠENÝ PROTECTED ROUTE
@@ -94,6 +96,9 @@ const App: React.FC = () => {
                         {/* Kalendář dostupnosti vidí všichni */}
                         <Route path="calendar" element={<AvailabilityCalendarPage />} />
                     </Route>
+
+                    <Route path="/forgot-password" element={<RequestReset />} />
+                    <Route path="/reset-hesla" element={<ResetPassword />} />
 
                     {/* OCHRANA PROTI NEEXISTUJÍCÍM ADRESÁM */}
                     <Route path="*" element={<Navigate to="/" replace />} />

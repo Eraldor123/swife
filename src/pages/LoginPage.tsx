@@ -1,12 +1,13 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { Box, Typography, Button, InputBase, Link, CircularProgress } from '@mui/material';
+import { useNavigate, Link } from 'react-router-dom';
+import { Box, Typography, Button, InputBase, CircularProgress } from '@mui/material';
 import LandscapeIcon from '@mui/icons-material/Landscape';
 import { useAuth } from '../context/AuthContext';
 
 const LoginPage: React.FC = () => {
     const [email, setEmail] = useState<string>('');
-    const [pin, setPin] = useState<string>('');
+    // ZMĚNĚNO: Z 'pin' na 'password'
+    const [password, setPassword] = useState<string>('');
     const [error, setError] = useState<string>('');
 
     const { isAuthenticated, isLoading, login, userRoles } = useAuth();
@@ -30,13 +31,12 @@ const LoginPage: React.FC = () => {
             const response = await fetch('http://localhost:8080/api/v1/auth/login', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ email: email, password: pin }),
+                // ZMĚNĚNO: Posíláme 'password', ne 'pin'
+                body: JSON.stringify({ email: email, password: password }),
             });
 
             if (response.ok) {
                 const data = await response.json();
-
-                // ZMĚNA: Přijímáme pole z data.roles
                 login(data.token, data.email, data.roles, data.userId);
 
                 if (data.roles && data.roles.includes('TERMINAL')) {
@@ -45,7 +45,7 @@ const LoginPage: React.FC = () => {
                     navigate('/dashboard');
                 }
             } else {
-                setError('Neplatný email nebo heslo (PIN).');
+                setError('Neplatný e-mail nebo heslo.');
             }
         } catch (err) {
             console.log(err);
@@ -53,7 +53,6 @@ const LoginPage: React.FC = () => {
         }
     };
 
-    // Zatímco AuthContext ověřuje na pozadí token, ukážeme hezký načítací spinner
     if (isLoading) {
         return (
             <Box sx={{ width: '100vw', height: '100vh', display: 'flex', justifyContent: 'center', alignItems: 'center', bgcolor: '#3e3535' }}>
@@ -65,23 +64,12 @@ const LoginPage: React.FC = () => {
 
     return (
         <Box sx={{ width: '100vw', height: '100vh', display: 'flex', flexDirection: 'column', position: 'relative', overflow: 'hidden' }}>
-
-            {/* POZADÍ */}
             <Box sx={{
                 position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, zIndex: -1,
                 background: 'linear-gradient(135deg, #e3c5d5 0%, #b8a3c9 50%, #9cb3d4 100%)'
             }}>
-                {/*
-        <video
-          autoPlay loop muted playsInline
-          style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-        >
-          <source src="/pozadi-video.mp4" type="video/mp4" />
-        </video>
-        */}
             </Box>
 
-            {/* HLAVIČKA */}
             <Box sx={{ height: '80px', bgcolor: '#3e3535', display: 'flex', alignItems: 'center', px: 4 }}>
                 <LandscapeIcon sx={{ color: 'white', fontSize: 40, mr: 1 }} />
                 <Typography variant="h6" sx={{ color: 'white', fontWeight: 'bold', mt: 1 }}>
@@ -89,10 +77,7 @@ const LoginPage: React.FC = () => {
                 </Typography>
             </Box>
 
-            {/* HLAVNÍ OBSAH */}
             <Box sx={{ flexGrow: 1, display: 'flex', justifyContent: 'center', alignItems: 'center', position: 'relative' }}>
-
-                {/* PŘIHLAŠOVACÍ FORMULÁŘ */}
                 <Box
                     component="form"
                     onSubmit={handleLogin}
@@ -110,7 +95,7 @@ const LoginPage: React.FC = () => {
                         Přihlášení
                     </Typography>
 
-                    <Typography sx={{ color: 'white', textAlign: 'center', mb: 1, fontSize: '14px' }}>Email</Typography>
+                    <Typography sx={{ color: 'white', textAlign: 'center', mb: 1, fontSize: '14px' }}>E-mail</Typography>
                     <InputBase
                         value={email}
                         onChange={(e) => setEmail(e.target.value)}
@@ -119,10 +104,11 @@ const LoginPage: React.FC = () => {
                         type="email"
                     />
 
+                    {/* ZMĚNĚNO: Text a vazba na state 'password' */}
                     <Typography sx={{ color: 'white', textAlign: 'center', mb: 1, fontSize: '14px' }}>Heslo</Typography>
                     <InputBase
-                        value={pin}
-                        onChange={(e) => setPin(e.target.value)}
+                        value={password}
+                        onChange={(e) => setPassword(e.target.value)}
                         sx={{ bgcolor: 'white', borderRadius: '20px', px: 2, py: 0.5, mb: 1 }}
                         required
                         type="password"
@@ -130,9 +116,13 @@ const LoginPage: React.FC = () => {
 
                     {error && <Typography color="error" sx={{ fontSize: '12px', textAlign: 'center', mb: 2 }}>{error}</Typography>}
 
+                    {/* PŘIDÁNO: Odkaz na reset hesla */}
                     <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mt: 2 }}>
-                        <Link href="#" underline="none" sx={{ color: 'white', fontSize: '12px', fontWeight: 'bold' }}>
-                            zapomenuté heslo?
+                        <Link
+                            to="/forgot-password"
+                            style={{ fontSize: '12px', color: '#9cb3d4', textDecoration: 'none' }}
+                        >
+                            Zapomněli jste heslo?
                         </Link>
                         <Button
                             type="submit"
@@ -152,7 +142,6 @@ const LoginPage: React.FC = () => {
                 </Box>
             </Box>
 
-            {/* PATIČKA */}
             <Box sx={{ height: '80px', bgcolor: '#3e3535' }} />
         </Box>
     );
