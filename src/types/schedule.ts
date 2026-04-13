@@ -18,6 +18,7 @@ export interface DailyHours {
 export interface AssignedUser {
     userId: string;
     name: string;
+    isCollision?: boolean;
 }
 
 /**

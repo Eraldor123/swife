@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import {
     Box, Typography, Paper, Button, Dialog, DialogTitle, DialogContent,
-    DialogActions, FormControlLabel, Radio, RadioGroup, Snackbar, Alert,
-    ToggleButton, ToggleButtonGroup, Divider, CircularProgress, Badge
+    DialogActions, FormControlLabel, Snackbar, Alert,
+    ToggleButton, ToggleButtonGroup, Divider, CircularProgress, Badge, Switch
 } from '@mui/material';
 import { LocalizationProvider, DateCalendar, PickersDay } from '@mui/x-date-pickers';
 import type { PickersDayProps } from '@mui/x-date-pickers';
@@ -24,8 +24,11 @@ interface BackendAvailabilityDto {
     hoursWorked?: number;
     positionName?: string;
     note?: string;
-    startTime?: string; // PŘIDÁNO: Připraveno pro backend
-    endTime?: string;   // PŘIDÁNO: Připraveno pro backend
+    startTime?: string;
+    endTime?: string;
+    // PŘIDÁNO POUZE TOTO PRO PŮLDENNÍ SMĚNY
+    hasMorningShift?: boolean;
+    hasAfternoonShift?: boolean;
 }
 
 interface UiAvailabilityDayDto {
@@ -39,41 +42,27 @@ const calculateShiftHours = (startTimeStr?: string, endTimeStr?: string): string
     if (!startTimeStr || !endTimeStr) return "0";
     const start = new Date(startTimeStr);
     const end = new Date(endTimeStr);
-
-    // Vypočítáme rozdíl v milisekundách a převedeme na hodiny
     let diffInHours = (end.getTime() - start.getTime()) / (1000 * 60 * 60);
-
-    // Pokud je směna delší než 6 hodin, automaticky odečteme 30 minut (0.5h) pauzu
     if (diffInHours > 6) {
         diffInHours -= 0.5;
     }
-
-    // Zajistíme, že hodiny nebudou záporné, a zaokrouhlíme na 1 desetinné místo
     return Math.max(0, diffInHours).toFixed(1);
 };
 
-const getAvailabilityGradient = (data: BackendAvailabilityDto | UiAvailabilityDayDto | undefined, isUiOnly = false): string => {
+// UPRAVENO: Vrátí správný gradient napůl
+const getAvailabilityGradient = (data: BackendAvailabilityDto | UiAvailabilityDayDto | undefined): string => {
     if (!data) return '#ffebee';
+    const bData = data as BackendAvailabilityDto;
 
-    const backendData = data as BackendAvailabilityDto;
-    const isConf = backendData.isConfirmed === true || backendData.confirmed === true;
+    let morningColor = '#ffebee';
+    if (bData?.hasMorningShift) morningColor = '#64b5f6';
+    else if (data.morning) morningColor = '#81c784';
 
-    const morningColor = isUiOnly ? '#81c784' : (isConf ? '#64b5f6' : '#81c784');
-    const afternoonColor = isUiOnly ? '#81c784' : (isConf ? '#64b5f6' : '#81c784');
-    const unsetColor = '#ffebee';
+    let afternoonColor = '#ffebee';
+    if (bData?.hasAfternoonShift) afternoonColor = '#64b5f6';
+    else if (data.afternoon) afternoonColor = '#81c784';
 
-    const isMorning = data.morning;
-    const isAfternoon = data.afternoon;
-
-    if (isMorning && isAfternoon) {
-        return `linear-gradient(90deg, ${morningColor} 50%, ${afternoonColor} 50%)`;
-    } else if (isMorning) {
-        return `linear-gradient(90deg, ${morningColor} 50%, ${unsetColor} 50%)`;
-    } else if (isAfternoon) {
-        return `linear-gradient(90deg, ${unsetColor} 50%, ${afternoonColor} 50%)`;
-    }
-
-    return '#ffebee';
+    return `linear-gradient(90deg, ${morningColor} 50%, ${afternoonColor} 50%)`;
 };
 
 const AvailabilityStyledDay = (props: PickersDayProps & { backendAvailabilities?: BackendAvailabilityDto[], uiAvailabilities?: UiAvailabilityDayDto[] }) => {
@@ -85,9 +74,8 @@ const AvailabilityStyledDay = (props: PickersDayProps & { backendAvailabilities?
         const dbDate = a.availableDate || a.date;
         return dbDate ? dayjs(dbDate).format('YYYY-MM-DD') === dateStr : false;
     });
-
-    const background = outsideCurrentMonth ? 'transparent' : getAvailabilityGradient(uiAvail || backendAvail, !!uiAvail);
-    const isConf = backendAvail ? (backendAvail.isConfirmed === true || backendAvail.confirmed === true) : false;
+    const background = outsideCurrentMonth ? 'transparent' : getAvailabilityGradient(uiAvail || backendAvail);
+    const isConf = backendAvail ? (backendAvail.hasMorningShift || backendAvail.hasAfternoonShift) : false;
 
     return (
         <Badge
@@ -133,7 +121,6 @@ const AvailabilityStyledDay = (props: PickersDayProps & { backendAvailabilities?
 
 const AvailabilityCalendarPage: React.FC = () => {
     const { userId, isLoading: authLoading } = useAuth();
-
     const [viewMode, setViewMode] = useState<'PLANNING' | 'INSPECT'>('PLANNING');
     const [status, setStatus] = useState<{ type: 'success' | 'error' | undefined; message: string }>({ type: undefined, message: '' });
     const [snackbarOpen, setSnackbarOpen] = useState(false);
@@ -141,7 +128,10 @@ const AvailabilityCalendarPage: React.FC = () => {
     const [selectedDate, setSelectedDate] = useState<Dayjs | null>(dayjs());
     const [currentMonth, setCurrentMonth] = useState<Dayjs>(dayjs());
     const [isDialogOpen, setIsDialogOpen] = useState(false);
-    const [shiftType, setShiftType] = useState('FULL_DAY');
+
+    // ZMĚNĚNO NA SWITCH STAVY
+    const [shiftMorning, setShiftMorning] = useState(false);
+    const [shiftAfternoon, setShiftAfternoon] = useState(false);
 
     const [savedAvailabilities, setSavedAvailabilities] = useState<BackendAvailabilityDto[]>([]);
     const [uiChanges, setUiChanges] = useState<UiAvailabilityDayDto[]>([]);
@@ -180,32 +170,20 @@ const AvailabilityCalendarPage: React.FC = () => {
     const handleDateChange = (newDate: Dayjs | null) => {
         if (!newDate) return;
         setSelectedDate(newDate);
+        const dateStr = newDate.format('YYYY-MM-DD');
 
         if (viewMode === 'PLANNING') {
-            const dateStr = newDate.format('YYYY-MM-DD');
             const existingUi = uiChanges.find(d => d.date === dateStr);
             const existingBackend = savedAvailabilities.find(a => {
                 const dbDate = a.availableDate || a.date;
                 return dbDate ? dayjs(dbDate).format('YYYY-MM-DD') === dateStr : false;
             });
 
-            const isConf = existingBackend ? (existingBackend.isConfirmed === true || existingBackend.confirmed === true) : false;
-            if (isConf) {
-                setStatus({ type: 'error', message: 'Na tento den už máte naplánovanou směnu, nelze jej změnit.' });
-                setSnackbarOpen(true);
-                return;
-            }
-
             const data = existingUi || existingBackend;
 
-            if (data) {
-                if (data.morning && data.afternoon) setShiftType('FULL_DAY');
-                else if (data.morning) setShiftType('MORNING');
-                else if (data.afternoon) setShiftType('AFTERNOON');
-                else setShiftType('NONE');
-            } else {
-                setShiftType('FULL_DAY');
-            }
+            // Nastavíme hodnoty pro dopoledne a odpoledne nezávisle
+            setShiftMorning(existingBackend?.hasMorningShift || (data ? data.morning : false));
+            setShiftAfternoon(existingBackend?.hasAfternoonShift || (data ? data.afternoon : false));
         }
         setIsDialogOpen(true);
     };
@@ -216,8 +194,8 @@ const AvailabilityCalendarPage: React.FC = () => {
 
         const newDay: UiAvailabilityDayDto = {
             date: dateStr,
-            morning: shiftType === 'FULL_DAY' || shiftType === 'MORNING',
-            afternoon: shiftType === 'FULL_DAY' || shiftType === 'AFTERNOON',
+            morning: shiftMorning,
+            afternoon: shiftAfternoon,
         };
 
         setUiChanges(prev => [...prev.filter(d => d.date !== dateStr), newDay]);
@@ -268,7 +246,6 @@ const AvailabilityCalendarPage: React.FC = () => {
 
             if (response.ok) {
                 setStatus({ type: 'success', message: 'Změny byly uloženy!' });
-
                 setSavedAvailabilities(payloadDays);
                 setUiChanges([]);
 
@@ -287,7 +264,6 @@ const AvailabilityCalendarPage: React.FC = () => {
 
     const isInspectMode = viewMode === 'INSPECT';
 
-    // === VÝPOČET DAT PRO MODAL ===
     const currentBackendDay = savedAvailabilities.find(a => {
         const dbDate = a.availableDate || a.date;
         return dbDate ? dayjs(dbDate).format('YYYY-MM-DD') === selectedDate?.format('YYYY-MM-DD') : false;
@@ -295,7 +271,7 @@ const AvailabilityCalendarPage: React.FC = () => {
 
     const displayHours = (currentBackendDay?.startTime && currentBackendDay?.endTime)
         ? calculateShiftHours(currentBackendDay.startTime, currentBackendDay.endTime)
-        : currentBackendDay?.hoursWorked?.toString() || "8.5"; // Záložní fallback, dokud to nepropojíte
+        : currentBackendDay?.hoursWorked?.toString() || "8.5";
 
     const displayPosition = currentBackendDay?.positionName || "Skladník / Manipulant";
     const displayNote = currentBackendDay?.note || "Směna potvrzena systémem.";
@@ -383,7 +359,6 @@ const AvailabilityCalendarPage: React.FC = () => {
                                 <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
                                     <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
                                         <Typography color="textSecondary">Odpracováno:</Typography>
-                                        {/* TADY JE NAPOJENÁ NOVÁ PROMĚNNÁ */}
                                         <Typography fontWeight="bold">{displayHours} hodin</Typography>
                                     </Box>
                                     <Divider />
@@ -401,14 +376,32 @@ const AvailabilityCalendarPage: React.FC = () => {
                                 </Box>
                             </Box>
                         ) : (
-                            <Box sx={{ mt: 1 }}>
+                            <Box sx={{ mt: 1, display: 'flex', flexDirection: 'column', gap: 2 }}>
                                 <Typography variant="subtitle1" gutterBottom sx={{ fontWeight: 'bold' }}>Kdy máte v tento den čas?</Typography>
-                                <RadioGroup value={shiftType} onChange={(e) => setShiftType(e.target.value)}>
-                                    <FormControlLabel value="FULL_DAY" control={<Radio />} label="Celý den" />
-                                    <FormControlLabel value="MORNING" control={<Radio />} label="Pouze dopoledne" />
-                                    <FormControlLabel value="AFTERNOON" control={<Radio />} label="Pouze odpoledne" />
-                                    <FormControlLabel value="NONE" control={<Radio sx={{ color: 'error.main', '&.Mui-checked': { color: 'error.main' } }} />} label={<Typography color="error">Zrušit (Nemám čas)</Typography>} />
-                                </RadioGroup>
+
+                                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', p: 1.5, bgcolor: '#f5f5f5', borderRadius: 2 }}>
+                                    <Typography fontWeight="bold">Dopoledne</Typography>
+                                    {currentBackendDay?.hasMorningShift ? (
+                                        <Typography color="primary" fontWeight="bold">✅ Naplánovaná směna</Typography>
+                                    ) : (
+                                        <FormControlLabel
+                                            control={<Switch color="success" checked={shiftMorning} onChange={(e) => setShiftMorning(e.target.checked)} />}
+                                            label={shiftMorning ? "Mám čas" : "Nemám čas"}
+                                        />
+                                    )}
+                                </Box>
+
+                                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', p: 1.5, bgcolor: '#f5f5f5', borderRadius: 2 }}>
+                                    <Typography fontWeight="bold">Odpoledne</Typography>
+                                    {currentBackendDay?.hasAfternoonShift ? (
+                                        <Typography color="primary" fontWeight="bold">✅ Naplánovaná směna</Typography>
+                                    ) : (
+                                        <FormControlLabel
+                                            control={<Switch color="success" checked={shiftAfternoon} onChange={(e) => setShiftAfternoon(e.target.checked)} />}
+                                            label={shiftAfternoon ? "Mám čas" : "Nemám čas"}
+                                        />
+                                    )}
+                                </Box>
                             </Box>
                         )}
                     </DialogContent>

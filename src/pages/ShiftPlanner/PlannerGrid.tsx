@@ -1,6 +1,6 @@
 // src/components/shifts/Planner/PlannerGrid.tsx
 
-import React, { useMemo } from 'react'; // PŘIDÁNO: useMemo
+import React, { useMemo } from 'react';
 import { Box, Typography, Paper, Tooltip } from '@mui/material';
 import { useAuth } from '../../context/AuthContext';
 import type {
@@ -107,8 +107,10 @@ const PlannerGrid: React.FC<Props> = ({ hierarchy, scheduleData, users, selected
             const fullUserObj = users.find(user => user.userId === u.userId);
             const isUnqualified = fullUserObj && requiresQual ? !fullUserObj.qualifiedStationIds?.includes(shift.stationId) : false;
             const isMe = u.userId === loggedInUserId;
+            // Nová vlastnost vytažená z DTO
+            const isCollision = u.isCollision === true;
 
-            return { surname, name: u.name, isUnqualified, isMe };
+            return { surname, name: u.name, isUnqualified, isMe, isCollision };
         }) || [];
 
         return (
@@ -116,7 +118,12 @@ const PlannerGrid: React.FC<Props> = ({ hierarchy, scheduleData, users, selected
                 <Box sx={{ p: 1, fontSize: '0.75rem' }}>
                     <Typography variant="caption" sx={{ fontWeight: 'bold', display: 'block', mb: 0.5 }}>
                         {assignedData.length > 0
-                            ? assignedData.map(u => u.isUnqualified ? `${u.name} ⚠️ (Zaučení)` : u.name).join(', ')
+                            ? assignedData.map(u => {
+                                let label = u.name;
+                                if (u.isUnqualified) label += ' ⚠️ (Zaučení)';
+                                if (u.isCollision) label += ' ⛔ (KOLIZE - Jiná směna!)';
+                                return label;
+                            }).join(', ')
                             : 'Žádný zaměstnanec'}
                     </Typography>
                     <Typography variant="body2">Čas: {formatTime(shift.startTime)} — {formatTime(shift.endTime)}</Typography>
@@ -150,15 +157,23 @@ const PlannerGrid: React.FC<Props> = ({ hierarchy, scheduleData, users, selected
                 >
                     {assignedData.slice(0, 2).map((userObj, idx) => (
                         <Typography key={idx} sx={{
-                            fontSize: '0.65rem', fontWeight: 'bold', textAlign: 'center', width: '100%', overflow: 'hidden',
-                            bgcolor: userObj.isMe ? 'white' : 'transparent',
-                            color: userObj.isMe ? 'black' : (userObj.isUnqualified ? '#ffeb3b' : 'white'),
-                            borderRadius: userObj.isMe ? '4px' : '0',
-                            px: userObj.isMe ? 0.5 : 0,
+                            fontSize: '0.65rem',
+                            fontWeight: 'bold',
+                            textAlign: 'center',
+                            width: '100%',
+                            overflow: 'hidden',
+                            // Upravené zobrazení při kolizi
+                            bgcolor: userObj.isCollision ? '#ffebee' : (userObj.isMe ? 'white' : 'transparent'),
+                            color: userObj.isCollision ? '#d32f2f' : (userObj.isMe ? 'black' : (userObj.isUnqualified ? '#ffeb3b' : 'white')),
+                            border: userObj.isCollision ? '1px solid #d32f2f' : 'none',
+                            borderRadius: (userObj.isMe || userObj.isCollision) ? '4px' : '0',
+                            px: (userObj.isMe || userObj.isCollision) ? 0.5 : 0,
                             mb: 0.2,
-                            textShadow: userObj.isMe ? 'none' : '0px 0px 3px rgba(0,0,0,0.8)'
+                            textShadow: (userObj.isMe || userObj.isCollision) ? 'none' : '0px 0px 3px rgba(0,0,0,0.8)'
                         }}>
-                            {userObj.surname} {userObj.isUnqualified && '⚠️'}
+                            {userObj.isCollision && '⚠️ '}
+                            {userObj.surname}
+                            {userObj.isUnqualified && !userObj.isCollision && '⚠️'}
                         </Typography>
                     ))}
                     <Typography sx={{ fontSize: '0.6rem', position: 'absolute', bottom: 1, right: 3, opacity: 0.8 }}>
