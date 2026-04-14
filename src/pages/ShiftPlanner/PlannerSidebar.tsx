@@ -25,18 +25,24 @@ interface SidebarProps {
 }
 
 const PlannerSidebar: React.FC<SidebarProps> = ({
-                                                    users, selectedUserId, onSelectUser, shifts, viewMode, selectedDate,
-                                                    onAutoPlan
+                                                    users, selectedUserId, onSelectUser, shifts, viewMode, selectedDate, onAutoPlan
                                                 }) => {
     const [tabIndex, setTabIndex] = useState(0);
 
     const processedUsers = useMemo(() => {
-        return users.map(user => {
+        // 1. BEZPEČNOSTNÍ POJISTKA: Zkontrolujeme, že users je pole
+        if (!Array.isArray(users)) return [];
+
+        // 2. BEZPEČNOSTNÍ POJISTKA: Vyhodíme všechny null/undefined záznamy
+        const validUsers = users.filter(user => user !== null && user !== undefined);
+
+        return validUsers.map(user => {
             let offeredSlots = 0;
             let workedSlots = 0;
 
             if (viewMode === 'day') {
-                const avail = user.weekAvailability?.[selectedDate];
+                // 3. BEZPEČNOSTNÍ POJISTKA: Přidán otazník u user?.weekAvailability
+                const avail = user?.weekAvailability?.[selectedDate];
                 if (avail === 'CELÝ DEN') offeredSlots = 2;
                 else if (avail === 'DOP' || avail === 'ODP') offeredSlots = 1;
 
@@ -58,8 +64,9 @@ const PlannerSidebar: React.FC<SidebarProps> = ({
 
                 if (hasMorning) workedSlots += 1;
                 if (hasAfternoon) workedSlots += 1;
+
             } else {
-                Object.values(user.weekAvailability || {}).forEach(avail => {
+                Object.values(user?.weekAvailability || {}).forEach(avail => {
                     if (avail === 'CELÝ DEN') offeredSlots += 2;
                     else if (avail === 'DOP' || avail === 'ODP') offeredSlots += 1;
                 });
@@ -146,11 +153,11 @@ const PlannerSidebar: React.FC<SidebarProps> = ({
                                 >
                                     <ListItemAvatar>
                                         <Avatar sx={{ bgcolor: isSelected ? '#1976d2' : (tabIndex === 1 ? '#e0e0e0' : '#bdbdbd') }}>
-                                            {user.name.charAt(0)}
+                                            {user.name ? user.name.charAt(0) : '?'}
                                         </Avatar>
                                     </ListItemAvatar>
                                     <ListItemText
-                                        primary={<Typography sx={{ fontWeight: isSelected ? 'bold' : 'normal', color: '#3e3535' }}>{user.name}</Typography>}
+                                        primary={<Typography sx={{ fontWeight: isSelected ? 'bold' : 'normal', color: '#3e3535' }}>{user.name || 'Neznámý'}</Typography>}
                                     />
                                 </ListItemButton>
                             </ListItem>
@@ -160,13 +167,13 @@ const PlannerSidebar: React.FC<SidebarProps> = ({
                                     <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1, alignItems: 'center' }}>
                                         <Typography variant="body2" color="text.secondary">Naplánováno v měsíci:</Typography>
                                         <Typography variant="body2" sx={{ fontWeight: 'bold', bgcolor: '#3e3535', color: 'white', px: 1, py: 0.2, borderRadius: 1 }}>
-                                            {user.plannedShiftsThisMonth}
+                                            {user.plannedShiftsThisMonth || 0}
                                         </Typography>
                                     </Box>
                                     <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                                         <Typography variant="body2" color="text.secondary">Splněno v měsíci:</Typography>
                                         <Typography variant="body2" sx={{ fontWeight: 'bold', border: '1px solid #3e3535', px: 1, py: 0.2, borderRadius: 1 }}>
-                                            {user.completedShiftsThisMonth}
+                                            {user.completedShiftsThisMonth || 0}
                                         </Typography>
                                     </Box>
                                 </Box>

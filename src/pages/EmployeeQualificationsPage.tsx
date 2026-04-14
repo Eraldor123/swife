@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
     Box, Typography, Paper, TextField, MenuItem, Select, FormControl, InputLabel,
     Table, TableBody, TableCell, TableContainer, TableHead, TableRow, TablePagination,
@@ -14,6 +14,7 @@ import {
 } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
 
+// --- ROZHRANÍ (INTERFACES) ---
 interface Station {
     id: number;
     name: string;
@@ -33,6 +34,7 @@ interface HierarchyStation {
     id: number;
     name: string;
     needsQualification: boolean;
+    isActive: boolean;
 }
 
 interface HierarchyCategory {
@@ -42,37 +44,39 @@ interface HierarchyCategory {
 const EmployeeQualificationsPage: React.FC = () => {
     const navigate = useNavigate();
 
-    // Stavy pro reálná data z databáze
     const [employees, setEmployees] = useState<Employee[]>([]);
     const [stations, setStations] = useState<Station[]>([]);
     const [loading, setLoading] = useState(true);
 
-    // Filtry a stránkování
+    // Stavy pro serverové stránkování (Fáze 2 Backend)
     const [searchQuery, setSearchQuery] = useState('');
     const [contractFilter, setContractFilter] = useState('VŠE');
     const [page, setPage] = useState(0);
     const [rowsPerPage, setRowsPerPage] = useState(10);
+    const [totalElements, setTotalElements] = useState(0);
 
-    // Modal
     const [isDialogOpen, setIsDialogOpen] = useState(false);
     const [selectedEmployee, setSelectedEmployee] = useState<Employee | null>(null);
     const [tempQualifications, setTempQualifications] = useState<number[]>([]);
 
-    // --- NAČTENÍ VŠECH DAT Z BACKENDU NAJEDNOU ---
-    const fetchData = async () => {
+    /**
+     * HLAVNÍ OPRAVA: Načítání dat s podporou stránkování a ochranou proti NULL.
+     */
+    const fetchData = useCallback(async () => {
         setLoading(true);
         try {
-            // ZMĚNA: Smazáno tahání tokenu z localStorage a hlavička, přidáno odesílání cookies
-
-            // 1. Stáhneme zaměstnance
-            const empRes = await fetch('http://localhost:8080/api/v1/qualifications/employees', {
+            // 1. Načtení stránkovaných zaměstnanců
+            const empRes = await fetch(`http://localhost:8080/api/v1/qualifications/employees?page=${page}&size=${rowsPerPage}`, {
                 credentials: 'include'
             });
             if (empRes.ok) {
-                setEmployees(await empRes.json());
+                const data = await empRes.json();
+                // Backend vrací Page objekt, data jsou v .content
+                setEmployees(data.content || []);
+                setTotalElements(data.totalElements || 0);
             }
 
-            // 2. Stáhneme stanoviště a vyfiltrujeme jen ta, co chtějí kvalifikaci
+            // 2. Načtení hierarchie pro seznam stanovišť
             const hierRes = await fetch('http://localhost:8080/api/v1/position-settings/hierarchy', {
                 credentials: 'include'
             });
@@ -80,8 +84,9 @@ const EmployeeQualificationsPage: React.FC = () => {
                 const hierData = await hierRes.json();
                 const qualStations: Station[] = [];
 
-                hierData.categories.forEach((cat: HierarchyCategory) => {
-                    cat.stations.forEach((stat: HierarchyStation) => {
+                // BEZPEČNOSTNÍ OPRAVA: Přidány pojistky ?. a || [] proti chybě "reading forEach"
+                (hierData?.categories || []).forEach((cat: HierarchyCategory) => {
+                    (cat?.stations || []).forEach((stat: HierarchyStation) => {
                         if (stat.needsQualification) {
                             qualStations.push({
                                 id: stat.id,
@@ -98,21 +103,20 @@ const EmployeeQualificationsPage: React.FC = () => {
         } finally {
             setLoading(false);
         }
-    };
+    }, [page, rowsPerPage]);
 
     useEffect(() => {
         void fetchData();
-    }, []);
+    }, [fetchData]);
 
-    // --- FILTROVÁNÍ ---
-    const filteredEmployees = employees.filter(emp => {
-        const fullName = `${emp.firstName} ${emp.lastName}`.toLowerCase();
+    // Filtrování na stažené stránce (pro lokální vyhledávání)
+    const filteredEmployees = (employees || []).filter(emp => {
+        const fullName = `${emp.firstName || ''} ${emp.lastName || ''}`.toLowerCase();
         const matchesSearch = fullName.includes(searchQuery.toLowerCase());
         const matchesContract = contractFilter === 'VŠE' || emp.contractType === contractFilter;
         return matchesSearch && matchesContract;
     });
 
-    // --- STRÁNKOVÁNÍ ---
     const handleChangePage = (_e: unknown, newPage: number) => {
         setPage(newPage);
     };
@@ -122,12 +126,9 @@ const EmployeeQualificationsPage: React.FC = () => {
         setPage(0);
     };
 
-    const paginatedEmployees = filteredEmployees.slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage);
-
-    // --- OVLÁDÁNÍ MODALU ---
     const handleOpenEdit = (employee: Employee) => {
         setSelectedEmployee(employee);
-        setTempQualifications([...employee.qualifiedStationIds]);
+        setTempQualifications([...(employee.qualifiedStationIds || [])]);
         setIsDialogOpen(true);
     };
 
@@ -137,17 +138,12 @@ const EmployeeQualificationsPage: React.FC = () => {
         );
     };
 
-    // --- ULOŽENÍ DO DATABÁZE ---
     const handleSaveQualifications = async () => {
         if (!selectedEmployee) return;
-
         try {
-            // ZMĚNA: Smazáno tahání tokenu z localStorage a hlavička, přidáno odesílání cookies
             const response = await fetch(`http://localhost:8080/api/v1/qualifications/users/${selectedEmployee.id}`, {
                 method: 'PUT',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
+                headers: { 'Content-Type': 'application/json' },
                 credentials: 'include',
                 body: JSON.stringify({ qualificationIds: tempQualifications })
             });
@@ -157,8 +153,6 @@ const EmployeeQualificationsPage: React.FC = () => {
                     emp.id === selectedEmployee.id ? { ...emp, qualifiedStationIds: tempQualifications } : emp
                 ));
                 setIsDialogOpen(false);
-            } else {
-                alert("Nepodařilo se uložit data na server.");
             }
         } catch (error) {
             console.error("Chyba při ukládání kvalifikace:", error);
@@ -166,16 +160,15 @@ const EmployeeQualificationsPage: React.FC = () => {
     };
 
     const getStationNames = (ids: number[]) => {
-        return ids.map(id => stations.find(s => s.id === id)?.name).filter(Boolean).join(', ');
+        return (ids || []).map(id => stations.find(s => s.id === id)?.name).filter(Boolean).join(', ');
     };
 
-    if (loading) {
+    if (loading && employees.length === 0) {
         return <Box sx={{ display: 'flex', justifyContent: 'center', mt: 10 }}><CircularProgress /></Box>;
     }
 
     return (
         <Box sx={{ maxWidth: '1400px', mx: 'auto', p: 3 }}>
-            {/* HLAVIČKA */}
             <Paper elevation={0} sx={{ p: 3, mb: 4, borderRadius: 3, border: '1px solid #eaeaea', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
                     <IconButton onClick={() => navigate('/dashboard/shifts')} sx={{ bgcolor: 'rgba(0,0,0,0.05)' }}>
@@ -196,21 +189,21 @@ const EmployeeQualificationsPage: React.FC = () => {
             <Paper elevation={3} sx={{ borderRadius: 3, p: 3 }}>
                 <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} sx={{ mb: 3 }} justifyContent="space-between">
                     <TextField
-                        label="Hledat podle jména nebo příjmení"
+                        label="Hledat na této stránce..."
                         variant="outlined"
                         size="small"
                         sx={{ width: { xs: '100%', sm: '400px' } }}
                         value={searchQuery}
-                        onChange={(e) => { setSearchQuery(e.target.value); setPage(0); }}
+                        onChange={(e) => setSearchQuery(e.target.value)}
                         InputProps={{ startAdornment: (<InputAdornment position="start"><SearchIcon color="action" /></InputAdornment>) }}
                     />
 
                     <FormControl size="small" sx={{ minWidth: 200, width: { xs: '100%', sm: 'auto' } }}>
-                        <InputLabel>Filtrovat podle úvazku</InputLabel>
+                        <InputLabel>Filtrovat úvazek</InputLabel>
                         <Select
                             value={contractFilter}
-                            label="Filtrovat podle úvazku"
-                            onChange={(e) => { setContractFilter(e.target.value); setPage(0); }}
+                            label="Filtrovat úvazek"
+                            onChange={(e) => setContractFilter(e.target.value)}
                         >
                             <MenuItem value="VŠE"><em>Všechny úvazky</em></MenuItem>
                             <MenuItem value="HPP">HPP</MenuItem>
@@ -222,7 +215,12 @@ const EmployeeQualificationsPage: React.FC = () => {
 
                 <Divider sx={{ mb: 1 }} />
 
-                <TableContainer>
+                <TableContainer sx={{ position: 'relative' }}>
+                    {loading && (
+                        <Box sx={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, bgcolor: 'rgba(255,255,255,0.5)', zIndex: 2, display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
+                            <CircularProgress size={24} />
+                        </Box>
+                    )}
                     <Table sx={{ minWidth: 650 }} size="small">
                         <TableHead>
                             <TableRow>
@@ -234,12 +232,12 @@ const EmployeeQualificationsPage: React.FC = () => {
                             </TableRow>
                         </TableHead>
                         <TableBody>
-                            {paginatedEmployees.length > 0 ? (
-                                paginatedEmployees.map((emp) => (
+                            {filteredEmployees.length > 0 ? (
+                                filteredEmployees.map((emp) => (
                                     <TableRow key={emp.id} hover sx={{ '&:last-child td, &:last-child th': { border: 0 } }}>
                                         <TableCell sx={{ py: 1.5 }}>
                                             <Avatar src={emp.photoUrl} sx={{ width: 40, height: 40, bgcolor: '#3e3535', fontSize: '1rem' }}>
-                                                {emp.firstName[0]}{emp.lastName[0]}
+                                                {(emp.firstName?.[0] || '')}{(emp.lastName?.[0] || '')}
                                             </Avatar>
                                         </TableCell>
                                         <TableCell sx={{ fontWeight: 'bold' }}>{emp.firstName} {emp.lastName}</TableCell>
@@ -254,7 +252,7 @@ const EmployeeQualificationsPage: React.FC = () => {
                                         </TableCell>
                                         <TableCell>
                                             <Typography variant="body2" color="textSecondary" sx={{ maxWidth: '300px' }}>
-                                                {emp.qualifiedStationIds.length > 0
+                                                {(emp.qualifiedStationIds?.length || 0) > 0
                                                     ? getStationNames(emp.qualifiedStationIds)
                                                     : <em style={{ color: '#bbb' }}>Žádná kvalifikace</em>
                                                 }
@@ -271,7 +269,7 @@ const EmployeeQualificationsPage: React.FC = () => {
                                 <TableRow>
                                     <TableCell colSpan={5} sx={{ textAlign: 'center', py: 4 }}>
                                         <SearchIcon sx={{ fontSize: 40, color: '#eee', mb: 1, display: 'block', mx: 'auto' }} />
-                                        Nenalezeni žádní zaměstnanci. Zkuste někoho zaregistrovat.
+                                        Nenalezeni žádní zaměstnanci.
                                     </TableCell>
                                 </TableRow>
                             )}
@@ -284,7 +282,7 @@ const EmployeeQualificationsPage: React.FC = () => {
                 <TablePagination
                     rowsPerPageOptions={[5, 10, 25]}
                     component="div"
-                    count={filteredEmployees.length}
+                    count={totalElements}
                     rowsPerPage={rowsPerPage}
                     page={page}
                     onPageChange={handleChangePage}
@@ -294,91 +292,41 @@ const EmployeeQualificationsPage: React.FC = () => {
                 />
             </Paper>
 
-            <Dialog
-                open={isDialogOpen}
-                onClose={() => setIsDialogOpen(false)}
-                fullWidth
-                maxWidth="xs"
-                PaperProps={{ sx: { borderRadius: 3, p: 1 } }}
-            >
+            {/* MODAL DIALOG */}
+            <Dialog open={isDialogOpen} onClose={() => setIsDialogOpen(false)} fullWidth maxWidth="xs" PaperProps={{ sx: { borderRadius: 3, p: 1 } }}>
                 <DialogTitle sx={{ fontWeight: 'bold', display: 'flex', justifyContent: 'space-between', alignItems: 'center', pb: 1 }}>
                     Upravit kvalifikace
-                    <IconButton onClick={() => setIsDialogOpen(false)} size="small">
-                        <CloseIcon fontSize="small" />
-                    </IconButton>
+                    <IconButton onClick={() => setIsDialogOpen(false)} size="small"><CloseIcon fontSize="small" /></IconButton>
                 </DialogTitle>
-
                 <DialogContent sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
                     <Box sx={{ bgcolor: '#f5f5f5', p: 2, borderRadius: 2, mb: 1, border: '1px solid #eaeaea', display: 'flex', alignItems: 'center', gap: 2 }}>
                         <Avatar src={selectedEmployee?.photoUrl} sx={{ width: 45, height: 45, bgcolor: '#3e3535' }}>
-                            {selectedEmployee ? `${selectedEmployee.firstName[0]}${selectedEmployee.lastName[0]}` : ''}
+                            {selectedEmployee ? `${selectedEmployee.firstName?.[0] || ''}${selectedEmployee.lastName?.[0] || ''}` : ''}
                         </Avatar>
                         <Box>
-                            <Typography variant="subtitle1" fontWeight="bold">
-                                {selectedEmployee?.firstName} {selectedEmployee?.lastName}
-                            </Typography>
-                            <Typography variant="caption" color="textSecondary">
-                                Úvazek: {selectedEmployee?.contractType !== 'N/A' ? selectedEmployee?.contractType : 'Bez smlouvy'}
-                            </Typography>
+                            <Typography variant="subtitle1" fontWeight="bold">{selectedEmployee?.firstName} {selectedEmployee?.lastName}</Typography>
+                            <Typography variant="caption" color="textSecondary">Úvazek: {selectedEmployee?.contractType !== 'N/A' ? selectedEmployee?.contractType : 'Bez smlouvy'}</Typography>
                         </Box>
                     </Box>
-
-                    <Typography variant="body2" color="textSecondary" sx={{ px: 1, mt: 1, fontWeight: 'bold' }}>
-                        Přiřazená stanoviště:
-                    </Typography>
-
+                    <Typography variant="body2" color="textSecondary" sx={{ px: 1, mt: 1, fontWeight: 'bold' }}>Přiřazená stanoviště:</Typography>
                     <Divider sx={{ mb: 1 }} />
-
                     <Stack spacing={0.5} sx={{ px: 1, maxHeight: '300px', overflowY: 'auto' }}>
-                        {stations.length > 0 ? stations.map(station => (
+                        {(stations || []).length > 0 ? stations.map(station => (
                             <FormControlLabel
                                 key={station.id}
-                                control={
-                                    <Checkbox
-                                        checked={tempQualifications.includes(station.id)}
-                                        onChange={() => handleToggleQualification(station.id)}
-                                        color="primary"
-                                        size="small"
-                                    />
-                                }
+                                control={<Checkbox checked={tempQualifications.includes(station.id)} onChange={() => handleToggleQualification(station.id)} color="primary" size="small" />}
                                 label={station.name}
-                                sx={{
-                                    '& .MuiFormControlLabel-label': {
-                                        fontSize: '0.95rem',
-                                        fontWeight: tempQualifications.includes(station.id) ? 'bold' : 'normal',
-                                        color: tempQualifications.includes(station.id) ? 'primary.main' : 'text.primary'
-                                    }
-                                }}
+                                sx={{ '& .MuiFormControlLabel-label': { fontSize: '0.95rem', fontWeight: tempQualifications.includes(station.id) ? 'bold' : 'normal', color: tempQualifications.includes(station.id) ? 'primary.main' : 'text.primary' } }}
                             />
                         )) : (
-                            <Typography variant="body2" color="textSecondary" sx={{ py: 2, textAlign: 'center' }}>
-                                V systému nejsou žádná stanoviště vyžadující kvalifikaci. Vytvořte je v "Nastavení pozic".
-                            </Typography>
+                            <Typography variant="body2" color="textSecondary" sx={{ py: 2, textAlign: 'center' }}>V systému nejsou žádná stanoviště vyžadující kvalifikaci.</Typography>
                         )}
                     </Stack>
                 </DialogContent>
-
                 <Divider sx={{ mt: 2 }} />
-
                 <DialogActions sx={{ p: 2.5, justifyContent: 'space-between' }}>
-                    <Button onClick={() => setIsDialogOpen(false)} color="inherit" variant="outlined" sx={{ borderRadius: 2 }}>
-                        ZRUŠIT
-                    </Button>
-                    <Button
-                        variant="contained"
-                        onClick={handleSaveQualifications}
-                        disabled={stations.length === 0}
-                        sx={{
-                            bgcolor: '#3e3535',
-                            color: 'white',
-                            fontWeight: 'bold',
-                            borderRadius: 2,
-                            px: 3,
-                            '&:hover': { bgcolor: '#2c2525' }
-                        }}
-                    >
-                        ULOŽIT ZMĚNY
-                    </Button>
+                    <Button onClick={() => setIsDialogOpen(false)} color="inherit" variant="outlined" sx={{ borderRadius: 2 }}>ZRUŠIT</Button>
+                    <Button variant="contained" onClick={handleSaveQualifications} disabled={(stations || []).length === 0} sx={{ bgcolor: '#3e3535', color: 'white', fontWeight: 'bold', borderRadius: 2, px: 3, '&:hover': { bgcolor: '#2c2525' } }}>ULOŽIT ZMĚNY</Button>
                 </DialogActions>
             </Dialog>
         </Box>

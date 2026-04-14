@@ -41,10 +41,27 @@ interface SeasonMode {
     dopoStart: string; dopoEnd: string; odpoStart: string; odpoEnd: string;
 }
 
+// PŘIDÁNO: Typová definice pro ukládání šablony
+interface TemplatePayload {
+    name: string;
+    stationId: number;
+    workersNeeded: number;
+    sortOrder: number;
+    isActive: boolean;
+    useOpeningHours: boolean;
+    hasDopo: boolean;
+    hasOdpo: boolean;
+    startTime?: string;
+    endTime?: string;
+    startTime2?: string;
+    endTime2?: string;
+}
+
 const PositionsSettingsPage: React.FC = () => {
     const navigate = useNavigate();
     const [activeTab, setActiveTab] = useState(0);
     const [loading, setLoading] = useState(true);
+    const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
     // --- STAVY: HIERARCHIE ---
     const [categories, setCategories] = useState<Category[]>([]);
@@ -94,19 +111,39 @@ const PositionsSettingsPage: React.FC = () => {
     const fetchHierarchy = async () => {
         try {
             const response = await fetch('http://localhost:8080/api/v1/position-settings/hierarchy', {
-                headers: { 'Cache-Control': 'no-cache' },
+                headers: { 'Cache-Control': 'no-cache', 'Accept': 'application/json' },
                 credentials: 'include'
             });
+
             if (response.ok) {
-                const data = await response.json();
-                setCategories(data.categories || []);
+                // Definujeme, že data obsahují pole kategorií podle našeho rozhraní
+                const data: { categories: Category[] } = await response.json();
+
+                // Sanitizace s využitím konkrétních typů Category a Station
+                const sanitizedCategories: Category[] = (data.categories || []).map((cat: Category) => ({
+                    ...cat,
+                    // Zajišťujeme, že stations je pole, a mapujeme každé stanoviště
+                    stations: (cat.stations || []).map((stat: Station) => ({
+                        ...stat,
+                        // Zajišťujeme, že templates je pole (využívá interface Template)
+                        templates: stat.templates || []
+                    }))
+                }));
+
+                setCategories(sanitizedCategories);
+                setErrorMessage(null);
+            } else {
+                throw new Error("Přístup odepřen nebo API není dostupné.");
             }
-        } catch (error) { console.error(error); }
+        } catch (error) {
+            console.error("Chyba při načítání hierarchie:", error);
+            setErrorMessage("Nepodařilo se připojit k serveru.");
+        }
     };
 
     const fetchOperatingHoursData = async () => {
         try {
-            const headers = { 'Cache-Control': 'no-cache' };
+            const headers = { 'Cache-Control': 'no-cache', 'Accept': 'application/json' };
 
             const [stdRes, pauseRes, seasonRes] = await Promise.all([
                 fetch('http://localhost:8080/api/v1/operating-hours/standard', { headers, credentials: 'include' }),
@@ -138,7 +175,6 @@ const PositionsSettingsPage: React.FC = () => {
         return timeStr;
     }
 
-    // --- POMOCNÁ FUNKCE PRO VÝPOČET DNEŠNÍ OTEVÍRACÍ DOBY ---
     const getTodayOpeningHoursText = (hasDopo?: boolean, hasOdpo?: boolean) => {
         const today = new Date();
         const todayStr = today.getFullYear() + '-' + String(today.getMonth() + 1).padStart(2, '0') + '-' + String(today.getDate()).padStart(2, '0');
@@ -167,7 +203,6 @@ const PositionsSettingsPage: React.FC = () => {
         return "";
     };
 
-    // --- OTEVŘENÍ DIALOGŮ ZÁLOŽKY 1 ---
     const openEditCategory = (cat: Category) => { setCatForm({ id: cat.id, name: cat.name, color: cat.color || '#2e7d32', order: cat.sortOrder || 1, active: cat.isActive !== false }); setIsCatDialogOpen(true); };
     const openEditStation = (stat: Station) => { setStatForm({ id: stat.id, name: stat.name, capacityLimit: stat.capacityLimit || 1, order: stat.sortOrder || 1, active: stat.isActive !== false, needsQualification: stat.needsQualification || false }); setIsStatDialogOpen(true); };
     const openEditTemplate = (tmpl: Template) => {
@@ -180,14 +215,11 @@ const PositionsSettingsPage: React.FC = () => {
             order: tmpl.sortOrder || 1,
             active: tmpl.isActive !== false,
             useOpeningHours: !!tmpl.useOpeningHours,
-
             fullStartTime: !isSplit ? tmpl.startTime?.substring(0, 5) || '08:00' : '08:00',
             fullEndTime: !isSplit ? tmpl.endTime?.substring(0, 5) || '16:00' : '16:00',
-
             hasDopo: tmpl.hasDopo !== undefined ? tmpl.hasDopo : true,
             dopoStartTime: tmpl.startTime?.substring(0, 5) || '08:00',
             dopoEndTime: tmpl.endTime?.substring(0, 5) || '12:00',
-
             hasOdpo: tmpl.hasOdpo !== undefined ? tmpl.hasOdpo : !!tmpl.startTime2,
             odpoStartTime: tmpl.startTime2?.substring(0, 5) || '13:00',
             odpoEndTime: tmpl.endTime2?.substring(0, 5) || '17:00'
@@ -195,7 +227,6 @@ const PositionsSettingsPage: React.FC = () => {
         setIsTmplDialogOpen(true);
     };
 
-    // --- ULOŽENÍ DAT ZÁLOŽKY 1 ---
     const handleSaveCategory = async () => {
         if (!catForm.name.trim()) return;
         const method = catForm.id ? 'PUT' : 'POST';
@@ -221,12 +252,7 @@ const PositionsSettingsPage: React.FC = () => {
         const method = tmplForm.id ? 'PUT' : 'POST';
         const url = tmplForm.id ? `http://localhost:8080/api/v1/position-settings/templates/${tmplForm.id}` : 'http://localhost:8080/api/v1/position-settings/templates';
 
-        interface TemplatePayload {
-            name: string; stationId: number; workersNeeded: number; isActive: boolean; sortOrder: number;
-            useOpeningHours: boolean; hasDopo: boolean; hasOdpo: boolean;
-            startTime?: string; endTime?: string; startTime2?: string; endTime2?: string;
-        }
-
+        // POUŽITÍ NOVÉHO TYPU MÍSTO "any"
         const payload: TemplatePayload = {
             name: tmplForm.name,
             stationId: Number(selectedStatId),
@@ -239,11 +265,23 @@ const PositionsSettingsPage: React.FC = () => {
         };
 
         if (tmplForm.shiftType === 'full') {
-            payload.startTime = formatTime(tmplForm.fullStartTime); payload.endTime = formatTime(tmplForm.fullEndTime);
+            payload.startTime = formatTime(tmplForm.fullStartTime);
+            payload.endTime = formatTime(tmplForm.fullEndTime);
         } else if (!tmplForm.useOpeningHours) {
-            if (tmplForm.hasDopo && tmplForm.hasOdpo) { payload.startTime = formatTime(tmplForm.dopoStartTime); payload.endTime = formatTime(tmplForm.dopoEndTime); payload.startTime2 = formatTime(tmplForm.odpoStartTime); payload.endTime2 = formatTime(tmplForm.odpoEndTime); }
-            else if (tmplForm.hasDopo) { payload.startTime = formatTime(tmplForm.dopoStartTime); payload.endTime = formatTime(tmplForm.dopoEndTime); }
-            else if (tmplForm.hasOdpo) { payload.startTime = formatTime(tmplForm.odpoStartTime); payload.endTime = formatTime(tmplForm.odpoEndTime); }
+            if (tmplForm.hasDopo && tmplForm.hasOdpo) {
+                payload.startTime = formatTime(tmplForm.dopoStartTime);
+                payload.endTime = formatTime(tmplForm.dopoEndTime);
+                payload.startTime2 = formatTime(tmplForm.odpoStartTime);
+                payload.endTime2 = formatTime(tmplForm.odpoEndTime);
+            }
+            else if (tmplForm.hasDopo) {
+                payload.startTime = formatTime(tmplForm.dopoStartTime);
+                payload.endTime = formatTime(tmplForm.dopoEndTime);
+            }
+            else if (tmplForm.hasOdpo) {
+                payload.startTime = formatTime(tmplForm.odpoStartTime);
+                payload.endTime = formatTime(tmplForm.odpoEndTime);
+            }
         }
 
         try {
@@ -252,7 +290,6 @@ const PositionsSettingsPage: React.FC = () => {
         } catch (error) { console.error(error); }
     };
 
-    // --- ULOŽENÍ DAT ZÁLOŽKY 2 ---
     const handleSaveHours = async () => {
         try {
             await fetch('http://localhost:8080/api/v1/operating-hours/standard', {
@@ -289,7 +326,6 @@ const PositionsSettingsPage: React.FC = () => {
         } catch (err) { console.error(err); }
     };
 
-    // --- MAZÁNÍ (Obě záložky) ---
     const executeDeleteOrDeactivate = async (action: 'deactivate' | 'hard_delete') => {
         if (!deleteDialog.id) return;
         try {
@@ -324,7 +360,6 @@ const PositionsSettingsPage: React.FC = () => {
         } catch (error) { console.error(error); alert("Akce se nezdařila."); }
     };
 
-    // --- FUNKCE OTEVŘENÍ DIALOGŮ ZÁLOŽKA 2 ---
     const handleOpenHoursEdit = () => { setHoursForm(standardHours); setIsHoursDialogOpen(true); };
     const handleOpenPauseEdit = () => { setPauseForm(pauseRule); setIsPauseDialogOpen(true); };
     const handleOpenSeasonEdit = (season?: SeasonMode) => {
@@ -333,16 +368,16 @@ const PositionsSettingsPage: React.FC = () => {
         setIsSeasonDialogOpen(true);
     };
 
-    // --- FILTRY ---
     const visibleCategories = categories.filter(c => showInactiveCats || c.isActive !== false);
     const currentCategory = categories.find(c => c.id === selectedCatId);
     const stationsRaw = currentCategory?.stations || [];
-    const visibleStations = stationsRaw.filter(s => showInactiveStats || s.isActive !== false);
-    const currentStation = stationsRaw.find(s => s.id === selectedStatId);
+    const visibleStations = (stationsRaw || []).filter(s => showInactiveStats || s.isActive !== false);
+    const currentStation = (stationsRaw || []).find(s => s.id === selectedStatId);
     const templatesRaw = currentStation?.templates || [];
-    const visibleTemplates = templatesRaw.filter(t => showInactiveTmpls || t.isActive !== false);
+    const visibleTemplates = (templatesRaw || []).filter(t => showInactiveTmpls || t.isActive !== false);
 
     if (loading) return <Box sx={{ display: 'flex', justifyContent: 'center', mt: 10 }}><CircularProgress /></Box>;
+    if (errorMessage) return <Box sx={{ p: 5 }}><Alert severity="error">{errorMessage}</Alert></Box>;
 
     return (
         <Box sx={{ maxWidth: '1400px', mx: 'auto', p: 3 }}>
@@ -702,12 +737,12 @@ const PositionsSettingsPage: React.FC = () => {
                     <Box>
                         <Typography fontWeight="bold" color="primary" mb={1}>Týden (Po-Pá)</Typography>
                         <Stack direction="row" spacing={2} mb={2}>
-                            <TextField label="Dopo od" type="time" size="small" value={hoursForm.weekDopoStart?.substring(0,5)} onChange={e => setHoursForm({...hoursForm, weekDopoStart: formatTime(e.target.value) || ''})} InputLabelProps={{ shrink: true }} />
-                            <TextField label="Dopo do" type="time" size="small" value={hoursForm.weekDopoEnd?.substring(0,5)} onChange={e => setHoursForm({...hoursForm, weekDopoEnd: formatTime(e.target.value) || ''})} InputLabelProps={{ shrink: true }} />
+                            <TextField label="Dopo od" type="time" size="small" value={hoursForm.weekDopoStart?.substring(0,5) || ''} onChange={e => setHoursForm({...hoursForm, weekDopoStart: formatTime(e.target.value) || ''})} InputLabelProps={{ shrink: true }} />
+                            <TextField label="Dopo do" type="time" size="small" value={hoursForm.weekDopoEnd?.substring(0,5) || ''} onChange={e => setHoursForm({...hoursForm, weekDopoEnd: formatTime(e.target.value) || ''})} InputLabelProps={{ shrink: true }} />
                         </Stack>
                         <Stack direction="row" spacing={2}>
-                            <TextField label="Odpo od" type="time" size="small" value={hoursForm.weekOdpoStart?.substring(0,5)} onChange={e => setHoursForm({...hoursForm, weekOdpoStart: formatTime(e.target.value) || ''})} InputLabelProps={{ shrink: true }} />
-                            <TextField label="Odpo do" type="time" size="small" value={hoursForm.weekOdpoEnd?.substring(0,5)} onChange={e => setHoursForm({...hoursForm, weekOdpoEnd: formatTime(e.target.value) || ''})} InputLabelProps={{ shrink: true }} />
+                            <TextField label="Odpo od" type="time" size="small" value={hoursForm.weekOdpoStart?.substring(0,5) || ''} onChange={e => setHoursForm({...hoursForm, weekOdpoStart: formatTime(e.target.value) || ''})} InputLabelProps={{ shrink: true }} />
+                            <TextField label="Odpo do" type="time" size="small" value={hoursForm.weekOdpoEnd?.substring(0,5) || ''} onChange={e => setHoursForm({...hoursForm, weekOdpoEnd: formatTime(e.target.value) || ''})} InputLabelProps={{ shrink: true }} />
                         </Stack>
                     </Box>
                     <Divider />
@@ -718,12 +753,12 @@ const PositionsSettingsPage: React.FC = () => {
                         </Stack>
                         <Box sx={{ opacity: hoursForm.weekendSame ? 0.5 : 1, pointerEvents: hoursForm.weekendSame ? 'none' : 'auto' }}>
                             <Stack direction="row" spacing={2} mb={2}>
-                                <TextField label="Dopo od" type="time" size="small" value={hoursForm.weekendSame ? hoursForm.weekDopoStart?.substring(0,5) : hoursForm.weekendDopoStart?.substring(0,5)} onChange={e => setHoursForm({...hoursForm, weekendDopoStart: formatTime(e.target.value) || ''})} InputLabelProps={{ shrink: true }} />
-                                <TextField label="Dopo do" type="time" size="small" value={hoursForm.weekendSame ? hoursForm.weekDopoEnd?.substring(0,5) : hoursForm.weekendDopoEnd?.substring(0,5)} onChange={e => setHoursForm({...hoursForm, weekendDopoEnd: formatTime(e.target.value) || ''})} InputLabelProps={{ shrink: true }} />
+                                <TextField label="Dopo od" type="time" size="small" value={hoursForm.weekendSame ? (hoursForm.weekDopoStart?.substring(0,5) || '') : (hoursForm.weekendDopoStart?.substring(0,5) || '')} onChange={e => setHoursForm({...hoursForm, weekendDopoStart: formatTime(e.target.value) || ''})} InputLabelProps={{ shrink: true }} />
+                                <TextField label="Dopo do" type="time" size="small" value={hoursForm.weekendSame ? (hoursForm.weekDopoEnd?.substring(0,5) || '') : (hoursForm.weekendDopoEnd?.substring(0,5) || '')} onChange={e => setHoursForm({...hoursForm, weekendDopoEnd: formatTime(e.target.value) || ''})} InputLabelProps={{ shrink: true }} />
                             </Stack>
                             <Stack direction="row" spacing={2}>
-                                <TextField label="Odpo od" type="time" size="small" value={hoursForm.weekendSame ? hoursForm.weekOdpoStart?.substring(0,5) : hoursForm.weekendOdpoStart?.substring(0,5)} onChange={e => setHoursForm({...hoursForm, weekendOdpoStart: formatTime(e.target.value) || ''})} InputLabelProps={{ shrink: true }} />
-                                <TextField label="Odpo do" type="time" size="small" value={hoursForm.weekendSame ? hoursForm.weekOdpoEnd?.substring(0,5) : hoursForm.weekendOdpoEnd?.substring(0,5)} onChange={e => setHoursForm({...hoursForm, weekendOdpoEnd: formatTime(e.target.value) || ''})} InputLabelProps={{ shrink: true }} />
+                                <TextField label="Odpo od" type="time" size="small" value={hoursForm.weekendSame ? (hoursForm.weekOdpoStart?.substring(0,5) || '') : (hoursForm.weekendOdpoStart?.substring(0,5) || '')} onChange={e => setHoursForm({...hoursForm, weekendOdpoStart: formatTime(e.target.value) || ''})} InputLabelProps={{ shrink: true }} />
+                                <TextField label="Odpo do" type="time" size="small" value={hoursForm.weekendSame ? (hoursForm.weekOdpoEnd?.substring(0,5) || '') : (hoursForm.weekendOdpoEnd?.substring(0,5) || '')} onChange={e => setHoursForm({...hoursForm, weekendOdpoEnd: formatTime(e.target.value) || ''})} InputLabelProps={{ shrink: true }} />
                             </Stack>
                         </Box>
                     </Box>
@@ -756,12 +791,12 @@ const PositionsSettingsPage: React.FC = () => {
                     </Stack>
                     <Divider><Chip label="Otevírací doba v tomto období" size="small" /></Divider>
                     <Stack direction="row" spacing={2}>
-                        <TextField label="Dopo od" type="time" fullWidth size="small" value={seasonForm.dopoStart?.substring(0,5)} onChange={e => setSeasonForm({...seasonForm, dopoStart: formatTime(e.target.value) || ''})} InputLabelProps={{ shrink: true }} />
-                        <TextField label="Dopo do" type="time" fullWidth size="small" value={seasonForm.dopoEnd?.substring(0,5)} onChange={e => setSeasonForm({...seasonForm, dopoEnd: formatTime(e.target.value) || ''})} InputLabelProps={{ shrink: true }} />
+                        <TextField label="Dopo od" type="time" fullWidth size="small" value={seasonForm.dopoStart?.substring(0,5) || ''} onChange={e => setSeasonForm({...seasonForm, dopoStart: formatTime(e.target.value) || ''})} InputLabelProps={{ shrink: true }} />
+                        <TextField label="Dopo do" type="time" fullWidth size="small" value={seasonForm.dopoEnd?.substring(0,5) || ''} onChange={e => setSeasonForm({...seasonForm, dopoEnd: formatTime(e.target.value) || ''})} InputLabelProps={{ shrink: true }} />
                     </Stack>
                     <Stack direction="row" spacing={2}>
-                        <TextField label="Odpo od" type="time" fullWidth size="small" value={seasonForm.odpoStart?.substring(0,5)} onChange={e => setSeasonForm({...seasonForm, odpoStart: formatTime(e.target.value) || ''})} InputLabelProps={{ shrink: true }} />
-                        <TextField label="Odpo do" type="time" fullWidth size="small" value={seasonForm.odpoEnd?.substring(0,5)} onChange={e => setSeasonForm({...seasonForm, odpoEnd: formatTime(e.target.value) || ''})} InputLabelProps={{ shrink: true }} />
+                        <TextField label="Odpo od" type="time" fullWidth size="small" value={seasonForm.odpoStart?.substring(0,5) || ''} onChange={e => setSeasonForm({...seasonForm, odpoStart: formatTime(e.target.value) || ''})} InputLabelProps={{ shrink: true }} />
+                        <TextField label="Odpo do" type="time" fullWidth size="small" value={seasonForm.odpoEnd?.substring(0,5) || ''} onChange={e => setSeasonForm({...seasonForm, odpoEnd: formatTime(e.target.value) || ''})} InputLabelProps={{ shrink: true }} />
                     </Stack>
                 </DialogContent>
                 <DialogActions sx={{ p: 2 }}>

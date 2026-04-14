@@ -9,11 +9,10 @@ export interface AutoPlanRequest {
     startDate?: string;
     endDate?: string;
     targetDate?: string;
-    categoryId?: number; // <--- PŘIDÁNO
+    categoryId?: number;
 }
 
 const getAuthHeader = () => {
-    // ZMĚNA: Smazáno tahání tokenu z localStorage a hlavička, přidáno odesílání cookies
     return {
         withCredentials: true
     };
@@ -30,10 +29,13 @@ export const ScheduleService = {
 
     getAvailableUsers: async (startDate: string, endDate: string): Promise<PlannerUser[]> => {
         const response = await axios.get(`${API_URL}/available-users`, {
-            params: { startDate, endDate },
+            // PŘIDÁNO: size: 100 zajistí, že nám backend pošle dostatek uživatelů pro sidebar (výchozí je jen 20)
+            params: { startDate, endDate, size: 100 },
             ...getAuthHeader()
         });
-        return response.data;
+
+        // OPRAVA: Zpracování Spring Page objektu (vrátíme pouze pole 'content')
+        return response.data.content || response.data;
     },
 
     generateShifts: async (startDate: string, endDate: string, templateId: number): Promise<void> => {

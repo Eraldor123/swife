@@ -78,24 +78,35 @@ export const ShiftPlanner = () => {
     const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
     const [selectedShiftForDetail, setSelectedShiftForDetail] = useState<ScheduleShift | null>(null);
 
+    // Najdi blok useMemo pro activeHierarchy (kolem řádku 1010)
     const activeHierarchy = useMemo(() => {
         if (!hierarchy || !scheduleData) return null;
-        const currentWeekStationIds = new Set(scheduleData.shifts.map(s => s.stationId));
+
+        // Ochrana: shifts mohou být null [cite: 1010]
+        const currentWeekStationIds = new Set((scheduleData.shifts || []).map(s => s.stationId));
 
         return {
-            categories: hierarchy.categories
+            // Ochrana proti null kategoriím
+            categories: (hierarchy.categories || [])
                 .map(cat => ({
                     ...cat,
-                    stations: cat.stations.filter(stat => stat.isActive !== false || currentWeekStationIds.has(stat.id))
+                    // Ochrana: stations mohou být null, proto (cat.stations || [])
+                    stations: (cat.stations || []).filter(stat =>
+                        stat.isActive !== false || currentWeekStationIds.has(stat.id)
+                    )
                 }))
-                .filter(cat => cat.stations.length > 0)
+                // Zobrazíme jen kategorie, které mají aspoň jedno stanoviště
+                .filter(cat => (cat.stations || []).length > 0)
         };
     }, [hierarchy, scheduleData]);
 
     const allStations = useMemo(() => {
         if (!activeHierarchy) return [];
-        return activeHierarchy.categories.flatMap(cat => cat.stations);
+        // Ochrana proti null při flatMap [cite: 1012]
+        return (activeHierarchy.categories || []).flatMap(cat => cat.stations || []);
     }, [activeHierarchy]);
+
+
 
     const [selectedDate, setSelectedDate] = useState<string>(currentWeekStart);
 

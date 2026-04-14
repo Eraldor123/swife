@@ -24,6 +24,9 @@ interface Props {
     onShiftClick: (shift: ScheduleShift) => void;
 }
 
+/**
+ * POMOCNÉ FUNKCE (Helpery)
+ */
 const formatDateShort = (dateStr: string) => {
     try {
         const d = new Date(dateStr);
@@ -50,42 +53,58 @@ const getHour = (isoString: string) => {
     return parseInt(isoString.substring(11, 13), 10);
 };
 
-const PlannerGrid: React.FC<Props> = ({ hierarchy, scheduleData, users, selectedUserId, onAssignUser, onRemoveUser, onShiftClick }) => {
+const PlannerGrid: React.FC<Props> = ({
+                                          hierarchy,
+                                          scheduleData,
+                                          users,
+                                          selectedUserId,
+                                          onAssignUser,
+                                          onRemoveUser,
+                                          onShiftClick
+                                      }) => {
     const { userRoles, userId: loggedInUserId } = useAuth();
 
     /**
      * ROBUSTNÍ KONTROLA ROLÍ:
-     * Očištění rolí pro správné fungování "Plánovače".
+     * Ověřuje, zda má uživatel právo zasahovat do plánu.
      */
     const isManagerial = useMemo(() => {
         const managerialRoles = ['ADMIN', 'PLANNER', 'MANAGEMENT', 'MANAGER'];
-        return userRoles.some((role: string) => {
+        return (userRoles || []).some((role: string) => {
             const cleanRole = role.replace('ROLE_', '').toUpperCase();
             return managerialRoles.includes(cleanRole);
         });
     }, [userRoles]);
 
+    // Pokud chybí data, nic nevykreslujeme (zabrání TypeError při načítání)
     if (!hierarchy || !scheduleData || !scheduleData.days) return null;
 
-    const daysCount = scheduleData.days.length;
-    const selectedUser = Array.isArray(users) ? users.find(u => u.userId === selectedUserId) : null;
+    const daysCount = (scheduleData.days || []).length;
+    const selectedUser = Array.isArray(users) ? users.find(u => u && u.userId === selectedUserId) : null;
 
+    /**
+     * Zjišťuje, zda jsou na stanovišti směny mimo standardní otevírací dobu.
+     */
     const getStationCustomTimes = (stationId: number) => {
-        const stationShifts = scheduleData.shifts?.filter(s => s.stationId === stationId) || [];
+        const stationShifts = (scheduleData.shifts || []).filter(s => s.stationId === stationId);
         if (stationShifts.length === 0) return null;
+
         const uniqueCustomRanges = new Set<string>();
         stationShifts.forEach(shift => {
             const sTime = formatTime(shift.startTime);
             const eTime = formatTime(shift.endTime);
             if (!sTime || !eTime) return;
-            const dayConfig = scheduleData.days.find(d => d.date === shift.shiftDate);
+
+            const dayConfig = (scheduleData.days || []).find(d => d.date === shift.shiftDate);
             if (dayConfig) {
                 const areaMorningStart = dayConfig.dopoStart?.substring(0, 5);
                 const areaMorningEnd = dayConfig.dopoEnd?.substring(0, 5);
                 const areaAfternoonStart = dayConfig.odpoStart?.substring(0, 5);
                 const areaAfternoonEnd = dayConfig.odpoEnd?.substring(0, 5);
+
                 const isStandardMorning = sTime === areaMorningStart && eTime === areaMorningEnd;
                 const isStandardAfternoon = sTime === areaAfternoonStart && eTime === areaAfternoonEnd;
+
                 if (!isStandardMorning && !isStandardAfternoon) {
                     uniqueCustomRanges.add(`${sTime}-${eTime}`);
                 }
@@ -94,24 +113,27 @@ const PlannerGrid: React.FC<Props> = ({ hierarchy, scheduleData, users, selected
         return uniqueCustomRanges.size > 0 ? Array.from(uniqueCustomRanges).join(', ') : null;
     };
 
+    /**
+     * Vykresluje jednu "pilulku" směny s informacemi o obsazenosti a kolizích.
+     */
     const renderShiftPill = (shift: ScheduleShift) => {
-        const assignedCount = shift.assignedUsers?.length || 0;
+        const currentAssignments = shift.assignedUsers || [];
+        const assignedCount = currentAssignments.length;
         const isFull = assignedCount >= shift.requiredCapacity;
-        const isAlreadyAssigned = selectedUserId && shift.assignedUsers?.some((u: AssignedUser) => u.userId === selectedUserId);
+        const isAlreadyAssigned = selectedUserId && currentAssignments.some((u: AssignedUser) => u.userId === selectedUserId);
 
-        const stationObj = hierarchy?.categories.flatMap(c => c.stations).find(s => s.id === shift.stationId);
+        const stationObj = (hierarchy.categories || []).flatMap(c => c.stations || []).find(s => s.id === shift.stationId);
         const requiresQual = stationObj?.needsQualification === true;
 
-        const assignedData = shift.assignedUsers?.map((u: AssignedUser) => {
+        const assignedData = currentAssignments.map((u: AssignedUser) => {
             const surname = getSurname(u.name);
-            const fullUserObj = users.find(user => user.userId === u.userId);
-            const isUnqualified = fullUserObj && requiresQual ? !fullUserObj.qualifiedStationIds?.includes(shift.stationId) : false;
+            const fullUserObj = (users || []).find(user => user && user.userId === u.userId);
+            const isUnqualified = fullUserObj && requiresQual ? !(fullUserObj.qualifiedStationIds || []).includes(shift.stationId) : false;
             const isMe = u.userId === loggedInUserId;
-            // Nová vlastnost vytažená z DTO
             const isCollision = u.isCollision === true;
 
             return { surname, name: u.name, isUnqualified, isMe, isCollision };
-        }) || [];
+        });
 
         return (
             <Tooltip key={shift.id} arrow title={
@@ -152,7 +174,7 @@ const PlannerGrid: React.FC<Props> = ({ hierarchy, scheduleData, users, selected
                         display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
                         color: 'white', px: 0.5, py: 0.5, position: 'relative', overflow: 'hidden', zIndex: 1,
                         transition: 'transform 0.1s',
-                        '&:hover': { transform: isManagerial ? 'scale(1.02)' : 'none' }
+                        '&:hover': { transform: isManagerial ? 'scale(1.02)' : 'none', zIndex: 2 }
                     }}
                 >
                     {assignedData.slice(0, 2).map((userObj, idx) => (
@@ -162,7 +184,6 @@ const PlannerGrid: React.FC<Props> = ({ hierarchy, scheduleData, users, selected
                             textAlign: 'center',
                             width: '100%',
                             overflow: 'hidden',
-                            // Upravené zobrazení při kolizi
                             bgcolor: userObj.isCollision ? '#ffebee' : (userObj.isMe ? 'white' : 'transparent'),
                             color: userObj.isCollision ? '#d32f2f' : (userObj.isMe ? 'black' : (userObj.isUnqualified ? '#ffeb3b' : 'white')),
                             border: userObj.isCollision ? '1px solid #d32f2f' : 'none',
@@ -197,8 +218,9 @@ const PlannerGrid: React.FC<Props> = ({ hierarchy, scheduleData, users, selected
             `}</style>
 
             <Box sx={{ display: 'grid', gridTemplateColumns: `180px repeat(${daysCount * 2}, minmax(60px, 1fr)) 180px` }}>
+                {/* HLAVIČKA */}
                 <Box sx={{ p: 2, fontWeight: 'bold', borderBottom: '2px solid #f0f0f0', bgcolor: '#fafafa', display: 'flex', alignItems: 'center', position: 'sticky', top: 0, zIndex: 10 }}>Stanoviště</Box>
-                {scheduleData.days.map((day: DailyHours, idx: number) => {
+                {(scheduleData.days || []).map((day: DailyHours, idx: number) => {
                     const formatted = formatDateShort(day.date);
                     return (
                         <Box key={idx} sx={{ gridColumn: 'span 2', borderBottom: '2px solid #f0f0f0', borderLeft: '1px solid #f0f0f0', bgcolor: '#fafafa', position: 'sticky', top: 0, zIndex: 10 }}>
@@ -215,13 +237,14 @@ const PlannerGrid: React.FC<Props> = ({ hierarchy, scheduleData, users, selected
                 })}
                 <Box sx={{ p: 2, fontWeight: 'bold', borderBottom: '2px solid #f0f0f0', borderLeft: '1px solid #f0f0f0', bgcolor: '#fafafa', display: 'flex', alignItems: 'center', position: 'sticky', top: 0, zIndex: 10 }}>Stanoviště</Box>
 
-                {hierarchy.categories.map((cat: HierarchyCategory) => (
+                {/* TĚLO GRIDU - KATEGORIE A STANOVIŠTĚ */}
+                {(hierarchy.categories || []).map((cat: HierarchyCategory) => (
                     <React.Fragment key={cat.id}>
                         <Box sx={{ gridColumn: '1 / -1', bgcolor: cat.color || '#f5f5f5', p: 1, pl: 3, fontWeight: 'bold', color: '#3e3535', fontSize: '0.85rem', textTransform: 'uppercase', borderBottom: '1px solid #eee' }}>
                             {cat.name}
                         </Box>
 
-                        {cat.stations.map((stat: HierarchyStation) => {
+                        {(cat.stations || []).map((stat: HierarchyStation) => {
                             const customTimes = getStationCustomTimes(stat.id);
                             const StationLabel = (
                                 <Box sx={{ borderRight: '1px solid #eee', borderLeft: '1px solid #eee', borderBottom: '1px solid #eee', p: 1.5, display: 'flex', flexDirection: 'column', justifyContent: 'center', bgcolor: 'white' }}>
@@ -233,8 +256,8 @@ const PlannerGrid: React.FC<Props> = ({ hierarchy, scheduleData, users, selected
                             return (
                                 <React.Fragment key={stat.id}>
                                     {StationLabel}
-                                    {scheduleData.days.map((day: DailyHours) => {
-                                        const shiftsForDay = scheduleData.shifts?.filter(s => s.stationId === stat.id && s.shiftDate === day.date) || [];
+                                    {(scheduleData.days || []).map((day: DailyHours) => {
+                                        const shiftsForDay = (scheduleData.shifts || []).filter(s => s.stationId === stat.id && s.shiftDate === day.date);
                                         const fullDayShifts: ScheduleShift[] = [];
                                         const morningShifts: ScheduleShift[] = [];
                                         const afternoonShifts: ScheduleShift[] = [];
@@ -242,7 +265,6 @@ const PlannerGrid: React.FC<Props> = ({ hierarchy, scheduleData, users, selected
                                         shiftsForDay.forEach(s => {
                                             const hour = getHour(s.startTime);
                                             const endHour = getHour(s.endTime);
-
                                             if (hour < 12 && endHour >= 15) fullDayShifts.push(s);
                                             else if (hour >= 12) afternoonShifts.push(s);
                                             else morningShifts.push(s);
@@ -251,14 +273,15 @@ const PlannerGrid: React.FC<Props> = ({ hierarchy, scheduleData, users, selected
                                         let highlightClass = '';
                                         let dynamicBackground = undefined;
 
+                                        // VIZUALIZACE DOSTUPNOSTI A KVALIFIKACE PRO VYBRANÉHO UŽIVATELE
                                         if (selectedUser) {
-                                            const isQualified = !stat.needsQualification || selectedUser.qualifiedStationIds?.includes(stat.id);
+                                            const isQualified = !stat.needsQualification || (selectedUser.qualifiedStationIds || []).includes(stat.id);
                                             const avail = selectedUser.weekAvailability?.[day.date];
 
-                                            const userShiftsToday = scheduleData.shifts?.filter(s =>
+                                            const userShiftsToday = (scheduleData.shifts || []).filter(s =>
                                                 s.shiftDate === day.date &&
-                                                s.assignedUsers.some(au => au.userId === selectedUser.userId)
-                                            ) || [];
+                                                (s.assignedUsers || []).some(au => au.userId === selectedUser.userId)
+                                            );
 
                                             let hasMorning = false;
                                             let hasAfternoon = false;

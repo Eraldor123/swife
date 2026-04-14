@@ -65,7 +65,8 @@ const DailyPlannerGrid: React.FC<Props> = ({ hierarchy, scheduleData, users, sel
 
     if (!hierarchy || !scheduleData) return null;
 
-    const selectedUser = Array.isArray(users) ? users.find(u => u.userId === selectedUserId) : null;
+    // PŘIDÁNA POJISTKA: u && u.userId
+    const selectedUser = Array.isArray(users) ? users.find(u => u && u.userId === selectedUserId) : null;
     const shiftsForDay = scheduleData.shifts?.filter(s => s.shiftDate === selectedDate) || [];
 
     const getGridColumn = (timeStr: string) => {
