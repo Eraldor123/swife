@@ -4,10 +4,9 @@ interface AuthContextType {
     isAuthenticated: boolean;
     isLoading: boolean;
     userEmail: string | null;
-    userId: string | null; // NOVÉ
+    userId: string | null;
     userRoles: string[];
-    // NOVÉ: Přidáno userId do parametrů
-    login: (token: string, email: string, roles: string[], userId: string) => void;
+    login: (email: string, roles: string[], userId: string) => void;
     logout: () => void;
 }
 
@@ -17,38 +16,41 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
     const [isLoading, setIsLoading] = useState<boolean>(true);
     const [userEmail, setUserEmail] = useState<string | null>(null);
-    const [userId, setUserId] = useState<string | null>(null); // NOVÉ
+    const [userId, setUserId] = useState<string | null>(null);
     const [userRoles, setUserRoles] = useState<string[]>([]);
 
     useEffect(() => {
         const verifyToken = async () => {
-            const token = localStorage.getItem('token');
             const email = localStorage.getItem('userEmail');
-            const id = localStorage.getItem('userId'); // NOVÉ
+            const id = localStorage.getItem('userId');
             const rolesString = localStorage.getItem('userRoles');
             const roles = rolesString ? JSON.parse(rolesString) : [];
-
-            if (!token) {
-                setIsLoading(false);
-                return;
-            }
 
             try {
                 const response = await fetch('http://localhost:8080/api/v1/users/verify', {
                     method: 'GET',
-                    headers: { 'Authorization': `Bearer ${token}` }
+                    credentials: 'include'
                 });
 
-                if (response.ok) {
+                const data = await response.json();
+
+                if (data.authenticated === true) {
                     setIsAuthenticated(true);
                     setUserEmail(email);
-                    setUserId(id); // NOVÉ
+                    setUserId(id);
                     setUserRoles(roles);
                 } else {
-                    logout();
+                    setIsAuthenticated(false);
+                    setUserEmail(null);
+                    setUserId(null);
+                    setUserRoles([]);
+                    localStorage.removeItem('userEmail');
+                    localStorage.removeItem('userId');
+                    localStorage.removeItem('userRoles');
                 }
             } catch (error) {
-                console.error("Chyba při ověřování tokenu:", error);
+                console.error("Chyba sítě při ověřování identity:", error);
+                setIsAuthenticated(false);
             } finally {
                 setIsLoading(false);
             }
@@ -57,25 +59,25 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         void verifyToken();
     }, []);
 
-    const login = (token: string, email: string, roles: string[], id: string) => {
-        localStorage.setItem('token', token);
+    const login = (email: string, roles: string[], id: string) => {
         localStorage.setItem('userEmail', email);
-        localStorage.setItem('userId', id); // NOVÉ
+        localStorage.setItem('userId', id);
         localStorage.setItem('userRoles', JSON.stringify(roles));
+
         setIsAuthenticated(true);
         setUserEmail(email);
-        setUserId(id); // NOVÉ
+        setUserId(id);
         setUserRoles(roles);
     };
 
     const logout = () => {
-        localStorage.removeItem('token');
         localStorage.removeItem('userEmail');
-        localStorage.removeItem('userId'); // NOVÉ
+        localStorage.removeItem('userId');
         localStorage.removeItem('userRoles');
+
         setIsAuthenticated(false);
         setUserEmail(null);
-        setUserId(null); // NOVÉ
+        setUserId(null);
         setUserRoles([]);
     };
 
@@ -86,6 +88,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     );
 };
 
+// TENTO KOMENTÁŘ ŘEŠÍ TVOJI CHYBU:
 // eslint-disable-next-line react-refresh/only-export-components
 export const useAuth = () => {
     const context = useContext(AuthContext);

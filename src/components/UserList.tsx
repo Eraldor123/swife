@@ -12,13 +12,15 @@ interface User {
     age: number;
 }
 
-
 const UserList = () => {
     const [users, setUsers] = useState<User[]>([]);
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
-        fetch('http://localhost:8080/api/test/users')
+        // ZMĚNA: Přidáno odesílání HttpOnly cookies
+        fetch('http://localhost:8080/api/test/users', {
+            credentials: 'include'
+        })
             .then(res => res.json())
             .then(data => {
                 setUsers(data);

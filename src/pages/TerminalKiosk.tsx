@@ -36,14 +36,13 @@ const TerminalKiosk: React.FC = () => {
 
         setIsLoading(true);
         try {
-            const token = localStorage.getItem('token');
             // Voláme endpoint pro autentizaci terminálu, který očekává JSON s "pin"
             const response = await fetch('http://localhost:8080/api/v1/terminal/auth', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${token}` // Tablet prokazuje, že je oprávněný terminál
                 },
+                credentials: 'include', // ZMĚNA: Přidáno odesílání HttpOnly cookies
                 body: JSON.stringify({ pin: pin }),
             });
 
@@ -59,8 +58,8 @@ const TerminalKiosk: React.FC = () => {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
-                        'Authorization': `Bearer ${token}`
                     },
+                    credentials: 'include', // ZMĚNA: Přidáno odesílání HttpOnly cookies
                     body: JSON.stringify({ userId: data.userId }),
                 });
 

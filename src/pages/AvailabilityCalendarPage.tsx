@@ -142,12 +142,12 @@ const AvailabilityCalendarPage: React.FC = () => {
 
         setLoading(true);
         try {
-            const token = localStorage.getItem('token');
             const monthStr = month.format('YYYY-MM');
 
             const response = await fetch(`http://localhost:8080/api/v1/availabilities/monthly/${userId}/${monthStr}`, {
                 method: 'GET',
-                headers: { 'Authorization': `Bearer ${token}` }
+                // ZMĚNA: Přidáno odesílání HttpOnly cookies
+                credentials: 'include'
             });
 
             if (response.ok) {
@@ -212,7 +212,6 @@ const AvailabilityCalendarPage: React.FC = () => {
 
         setLoading(true);
         try {
-            const token = localStorage.getItem('token');
             const monthStr = currentMonth.format('YYYY-MM');
 
             const mergedMap = new Map();
@@ -240,7 +239,9 @@ const AvailabilityCalendarPage: React.FC = () => {
 
             const response = await fetch('http://localhost:8080/api/v1/availabilities/monthly', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+                headers: { 'Content-Type': 'application/json' },
+                // ZMĚNA: Přidáno odesílání HttpOnly cookies
+                credentials: 'include',
                 body: JSON.stringify({ userId: userId, month: monthStr, availableDays: payloadDays })
             });
 

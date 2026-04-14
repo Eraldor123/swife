@@ -6,7 +6,6 @@ import { useAuth } from '../context/AuthContext';
 
 const LoginPage: React.FC = () => {
     const [email, setEmail] = useState<string>('');
-    // ZMĚNĚNO: Z 'pin' na 'password'
     const [password, setPassword] = useState<string>('');
     const [error, setError] = useState<string>('');
 
@@ -31,13 +30,14 @@ const LoginPage: React.FC = () => {
             const response = await fetch('http://localhost:8080/api/v1/auth/login', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                // ZMĚNĚNO: Posíláme 'password', ne 'pin'
+                credentials: 'include', // ZMĚNA: Přidáno pro odesílání a ukládání cookies
                 body: JSON.stringify({ email: email, password: password }),
             });
 
             if (response.ok) {
                 const data = await response.json();
-                login(data.token, data.email, data.roles, data.userId);
+                // ZMĚNA: Smazáno data.token, token se nyní ukládá jako HttpOnly cookie
+                login(data.email, data.roles, data.userId);
 
                 if (data.roles && data.roles.includes('TERMINAL')) {
                     navigate('/terminal');
@@ -60,7 +60,6 @@ const LoginPage: React.FC = () => {
             </Box>
         );
     }
-
 
     return (
         <Box sx={{ width: '100vw', height: '100vh', display: 'flex', flexDirection: 'column', position: 'relative', overflow: 'hidden' }}>
@@ -104,7 +103,6 @@ const LoginPage: React.FC = () => {
                         type="email"
                     />
 
-                    {/* ZMĚNĚNO: Text a vazba na state 'password' */}
                     <Typography sx={{ color: 'white', textAlign: 'center', mb: 1, fontSize: '14px' }}>Heslo</Typography>
                     <InputBase
                         value={password}
@@ -116,7 +114,6 @@ const LoginPage: React.FC = () => {
 
                     {error && <Typography color="error" sx={{ fontSize: '12px', textAlign: 'center', mb: 2 }}>{error}</Typography>}
 
-                    {/* PŘIDÁNO: Odkaz na reset hesla */}
                     <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mt: 2 }}>
                         <Link
                             to="/forgot-password"

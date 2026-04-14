@@ -79,14 +79,12 @@ const UserRegistrationPage: React.FC = () => {
         }
 
         try {
-            const token = localStorage.getItem('token');
-
             const response = await fetch('http://localhost:8080/api/v1/auth/register', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${token}`
                 },
+                credentials: 'include', // ZMĚNA: Přidáno odesílání HttpOnly cookies
                 body: JSON.stringify({
                     ...formData,
                     hourlyWage: formData.hourlyWage ? parseFloat(formData.hourlyWage) : null,
@@ -287,7 +285,7 @@ const UserRegistrationPage: React.FC = () => {
             <Snackbar
                 open={snackbarOpen}
                 autoHideDuration={3000}
-                
+
                 onClose={(_, reason) => handleCloseSnackbar(reason)}
                 anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
             >

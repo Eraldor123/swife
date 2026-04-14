@@ -13,9 +13,9 @@ export interface AutoPlanRequest {
 }
 
 const getAuthHeader = () => {
-    const token = localStorage.getItem('token');
+    // ZMĚNA: Smazáno tahání tokenu z localStorage a hlavička, přidáno odesílání cookies
     return {
-        headers: { 'Authorization': `Bearer ${token}` }
+        withCredentials: true
     };
 };
 

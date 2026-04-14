@@ -29,7 +29,6 @@ interface Employee {
     qualifiedStationIds: number[];
 }
 
-// Přidáno: Datové typy pro načítání hierarchie z backendu (řeší chyby s 'any')
 interface HierarchyStation {
     id: number;
     name: string;
@@ -63,17 +62,20 @@ const EmployeeQualificationsPage: React.FC = () => {
     const fetchData = async () => {
         setLoading(true);
         try {
-            const token = localStorage.getItem('token');
-            const headers = { 'Authorization': `Bearer ${token}` };
+            // ZMĚNA: Smazáno tahání tokenu z localStorage a hlavička, přidáno odesílání cookies
 
             // 1. Stáhneme zaměstnance
-            const empRes = await fetch('http://localhost:8080/api/v1/qualifications/employees', { headers });
+            const empRes = await fetch('http://localhost:8080/api/v1/qualifications/employees', {
+                credentials: 'include'
+            });
             if (empRes.ok) {
                 setEmployees(await empRes.json());
             }
 
             // 2. Stáhneme stanoviště a vyfiltrujeme jen ta, co chtějí kvalifikaci
-            const hierRes = await fetch('http://localhost:8080/api/v1/position-settings/hierarchy', { headers });
+            const hierRes = await fetch('http://localhost:8080/api/v1/position-settings/hierarchy', {
+                credentials: 'include'
+            });
             if (hierRes.ok) {
                 const hierData = await hierRes.json();
                 const qualStations: Station[] = [];
@@ -110,7 +112,7 @@ const EmployeeQualificationsPage: React.FC = () => {
         return matchesSearch && matchesContract;
     });
 
-    // --- STRÁNKOVÁNÍ (Přidány zpět chybějící funkce a ošetření unused vars) ---
+    // --- STRÁNKOVÁNÍ ---
     const handleChangePage = (_e: unknown, newPage: number) => {
         setPage(newPage);
     };
@@ -140,13 +142,13 @@ const EmployeeQualificationsPage: React.FC = () => {
         if (!selectedEmployee) return;
 
         try {
-            const token = localStorage.getItem('token');
+            // ZMĚNA: Smazáno tahání tokenu z localStorage a hlavička, přidáno odesílání cookies
             const response = await fetch(`http://localhost:8080/api/v1/qualifications/users/${selectedEmployee.id}`, {
                 method: 'PUT',
                 headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${token}`
+                    'Content-Type': 'application/json'
                 },
+                credentials: 'include',
                 body: JSON.stringify({ qualificationIds: tempQualifications })
             });
 

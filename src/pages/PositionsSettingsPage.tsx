@@ -93,9 +93,9 @@ const PositionsSettingsPage: React.FC = () => {
     // --- NAČÍTÁNÍ DAT ZE SERVERU ---
     const fetchHierarchy = async () => {
         try {
-            const token = localStorage.getItem('token');
             const response = await fetch('http://localhost:8080/api/v1/position-settings/hierarchy', {
-                headers: { 'Authorization': `Bearer ${token}`, 'Cache-Control': 'no-cache' }
+                headers: { 'Cache-Control': 'no-cache' },
+                credentials: 'include'
             });
             if (response.ok) {
                 const data = await response.json();
@@ -106,13 +106,12 @@ const PositionsSettingsPage: React.FC = () => {
 
     const fetchOperatingHoursData = async () => {
         try {
-            const token = localStorage.getItem('token');
-            const headers = { 'Authorization': `Bearer ${token}`, 'Cache-Control': 'no-cache' };
+            const headers = { 'Cache-Control': 'no-cache' };
 
             const [stdRes, pauseRes, seasonRes] = await Promise.all([
-                fetch('http://localhost:8080/api/v1/operating-hours/standard', { headers }),
-                fetch('http://localhost:8080/api/v1/operating-hours/pause-rule', { headers }),
-                fetch('http://localhost:8080/api/v1/operating-hours/seasons', { headers })
+                fetch('http://localhost:8080/api/v1/operating-hours/standard', { headers, credentials: 'include' }),
+                fetch('http://localhost:8080/api/v1/operating-hours/pause-rule', { headers, credentials: 'include' }),
+                fetch('http://localhost:8080/api/v1/operating-hours/seasons', { headers, credentials: 'include' })
             ]);
 
             if (stdRes.ok) setStandardHours(await stdRes.json());
@@ -202,8 +201,7 @@ const PositionsSettingsPage: React.FC = () => {
         const method = catForm.id ? 'PUT' : 'POST';
         const url = catForm.id ? `http://localhost:8080/api/v1/position-settings/categories/${catForm.id}` : 'http://localhost:8080/api/v1/position-settings/categories';
         try {
-            const token = localStorage.getItem('token');
-            await fetch(url, { method, headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` }, body: JSON.stringify({ name: catForm.name, hexColor: catForm.color, sortOrder: Number(catForm.order), isActive: Boolean(catForm.active) }) });
+            await fetch(url, { method, headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify({ name: catForm.name, hexColor: catForm.color, sortOrder: Number(catForm.order), isActive: Boolean(catForm.active) }) });
             setIsCatDialogOpen(false); await fetchHierarchy();
         } catch (error) { console.error(error); }
     };
@@ -213,8 +211,7 @@ const PositionsSettingsPage: React.FC = () => {
         const method = statForm.id ? 'PUT' : 'POST';
         const url = statForm.id ? `http://localhost:8080/api/v1/position-settings/stations/${statForm.id}` : 'http://localhost:8080/api/v1/position-settings/stations';
         try {
-            const token = localStorage.getItem('token');
-            await fetch(url, { method, headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` }, body: JSON.stringify({ name: statForm.name, categoryId: Number(selectedCatId), capacityLimit: Number(statForm.capacityLimit), sortOrder: Number(statForm.order), isActive: Boolean(statForm.active), needsQualification: Boolean(statForm.needsQualification) }) });
+            await fetch(url, { method, headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify({ name: statForm.name, categoryId: Number(selectedCatId), capacityLimit: Number(statForm.capacityLimit), sortOrder: Number(statForm.order), isActive: Boolean(statForm.active), needsQualification: Boolean(statForm.needsQualification) }) });
             setIsStatDialogOpen(false); await fetchHierarchy();
         } catch (error) { console.error(error); }
     };
@@ -250,8 +247,7 @@ const PositionsSettingsPage: React.FC = () => {
         }
 
         try {
-            const token = localStorage.getItem('token');
-            await fetch(url, { method, headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` }, body: JSON.stringify(payload) });
+            await fetch(url, { method, headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify(payload) });
             setIsTmplDialogOpen(false); await fetchHierarchy();
         } catch (error) { console.error(error); }
     };
@@ -259,9 +255,8 @@ const PositionsSettingsPage: React.FC = () => {
     // --- ULOŽENÍ DAT ZÁLOŽKY 2 ---
     const handleSaveHours = async () => {
         try {
-            const token = localStorage.getItem('token');
             await fetch('http://localhost:8080/api/v1/operating-hours/standard', {
-                method: 'PUT', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+                method: 'PUT', headers: { 'Content-Type': 'application/json' }, credentials: 'include',
                 body: JSON.stringify(hoursForm)
             });
             setIsHoursDialogOpen(false);
@@ -271,9 +266,8 @@ const PositionsSettingsPage: React.FC = () => {
 
     const handleSavePause = async () => {
         try {
-            const token = localStorage.getItem('token');
             await fetch('http://localhost:8080/api/v1/operating-hours/pause-rule', {
-                method: 'PUT', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+                method: 'PUT', headers: { 'Content-Type': 'application/json' }, credentials: 'include',
                 body: JSON.stringify({ triggerHours: pauseForm.triggerHours, pauseMinutes: pauseForm.pauseMinutes })
             });
             setIsPauseDialogOpen(false);
@@ -286,9 +280,8 @@ const PositionsSettingsPage: React.FC = () => {
         const method = seasonForm.id ? 'PUT' : 'POST';
         const url = seasonForm.id ? `http://localhost:8080/api/v1/operating-hours/seasons/${seasonForm.id}` : `http://localhost:8080/api/v1/operating-hours/seasons`;
         try {
-            const token = localStorage.getItem('token');
             await fetch(url, {
-                method, headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+                method, headers: { 'Content-Type': 'application/json' }, credentials: 'include',
                 body: JSON.stringify(seasonForm)
             });
             setIsSeasonDialogOpen(false);
@@ -300,10 +293,8 @@ const PositionsSettingsPage: React.FC = () => {
     const executeDeleteOrDeactivate = async (action: 'deactivate' | 'hard_delete') => {
         if (!deleteDialog.id) return;
         try {
-            const token = localStorage.getItem('token');
-
             if (deleteDialog.type === 'season') {
-                await fetch(`http://localhost:8080/api/v1/operating-hours/seasons/${deleteDialog.id}`, { method: 'DELETE', headers: { 'Authorization': `Bearer ${token}` } });
+                await fetch(`http://localhost:8080/api/v1/operating-hours/seasons/${deleteDialog.id}`, { method: 'DELETE', credentials: 'include' });
                 setDeleteDialog({ open: false, type: 'category', id: null, name: '' });
                 await fetchOperatingHoursData();
                 return;
@@ -317,13 +308,13 @@ const PositionsSettingsPage: React.FC = () => {
             const url = `http://localhost:8080/api/v1/position-settings/${endpoint}/${deleteDialog.id}`;
 
             if (action === 'hard_delete') {
-                await fetch(url, { method: 'DELETE', headers: { 'Authorization': `Bearer ${token}` } });
+                await fetch(url, { method: 'DELETE', credentials: 'include' });
             } else {
                 let itemData: DeactivationPayload = { isActive: false };
                 if (deleteDialog.type === 'category') itemData = { name: deleteDialog.name, hexColor: '#000000', sortOrder: 1, isActive: false };
                 else if (deleteDialog.type === 'station') itemData = { name: deleteDialog.name, categoryId: selectedCatId, sortOrder: 1, isActive: false };
                 else if (deleteDialog.type === 'template') itemData = { name: deleteDialog.name, stationId: selectedStatId, workersNeeded: 1, sortOrder: 1, startTime: "08:00:00", endTime: "16:00:00", isActive: false };
-                await fetch(url, { method: 'PUT', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` }, body: JSON.stringify(itemData) });
+                await fetch(url, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify(itemData) });
             }
 
             if (deleteDialog.type === 'category') { setSelectedCatId(null); setSelectedStatId(null); }

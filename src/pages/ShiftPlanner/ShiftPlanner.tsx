@@ -111,12 +111,11 @@ export const ShiftPlanner = () => {
     const loadData = useCallback(async () => {
         setIsLoading(true);
         try {
-            const token = localStorage.getItem('token');
             const [scheduleRes, usersRes, hierarchyRes] = await Promise.all([
                 ScheduleService.getWeeklySchedule(currentWeekStart, endDate),
                 ScheduleService.getAvailableUsers(currentWeekStart, endDate),
                 fetch('http://localhost:8080/api/v1/position-settings/hierarchy', {
-                    headers: { 'Authorization': `Bearer ${token}` }
+                    credentials: 'include'
                 }).then(res => res.json())
             ]);
 
