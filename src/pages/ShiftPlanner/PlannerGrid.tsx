@@ -70,7 +70,7 @@ const PlannerGrid: React.FC<Props> = ({
      */
     const isManagerial = useMemo(() => {
         const managerialRoles = ['ADMIN', 'PLANNER', 'MANAGEMENT', 'MANAGER'];
-        return (userRoles || []).some((role: string) => {
+        return (userRoles ?? []).some((role: string) => {
             const cleanRole = role.replace('ROLE_', '').toUpperCase();
             return managerialRoles.includes(cleanRole);
         });
@@ -79,14 +79,14 @@ const PlannerGrid: React.FC<Props> = ({
     // Pokud chybí data, nic nevykreslujeme (zabrání TypeError při načítání)
     if (!hierarchy || !scheduleData || !scheduleData.days) return null;
 
-    const daysCount = (scheduleData.days || []).length;
+    const daysCount = (scheduleData.days ?? []).length;
     const selectedUser = Array.isArray(users) ? users.find(u => u && u.userId === selectedUserId) : null;
 
     /**
      * Zjišťuje, zda jsou na stanovišti směny mimo standardní otevírací dobu.
      */
     const getStationCustomTimes = (stationId: number) => {
-        const stationShifts = (scheduleData.shifts || []).filter(s => s.stationId === stationId);
+        const stationShifts = (scheduleData.shifts ?? []).filter(s => s.stationId === stationId);
         if (stationShifts.length === 0) return null;
 
         const uniqueCustomRanges = new Set<string>();
@@ -95,7 +95,7 @@ const PlannerGrid: React.FC<Props> = ({
             const eTime = formatTime(shift.endTime);
             if (!sTime || !eTime) return;
 
-            const dayConfig = (scheduleData.days || []).find(d => d.date === shift.shiftDate);
+            const dayConfig = (scheduleData.days ?? []).find(d => d.date === shift.shiftDate);
             if (dayConfig) {
                 const areaMorningStart = dayConfig.dopoStart?.substring(0, 5);
                 const areaMorningEnd = dayConfig.dopoEnd?.substring(0, 5);
@@ -117,18 +117,18 @@ const PlannerGrid: React.FC<Props> = ({
      * Vykresluje jednu "pilulku" směny s informacemi o obsazenosti a kolizích.
      */
     const renderShiftPill = (shift: ScheduleShift) => {
-        const currentAssignments = shift.assignedUsers || [];
+        const currentAssignments = shift.assignedUsers ?? [];
         const assignedCount = currentAssignments.length;
         const isFull = assignedCount >= shift.requiredCapacity;
         const isAlreadyAssigned = selectedUserId && currentAssignments.some((u: AssignedUser) => u.userId === selectedUserId);
 
-        const stationObj = (hierarchy.categories || []).flatMap(c => c.stations || []).find(s => s.id === shift.stationId);
+        const stationObj = (hierarchy.categories ?? []).flatMap(c => c.stations ?? []).find(s => s.id === shift.stationId);
         const requiresQual = stationObj?.needsQualification === true;
 
         const assignedData = currentAssignments.map((u: AssignedUser) => {
             const surname = getSurname(u.name);
-            const fullUserObj = (users || []).find(user => user && user.userId === u.userId);
-            const isUnqualified = fullUserObj && requiresQual ? !(fullUserObj.qualifiedStationIds || []).includes(shift.stationId) : false;
+            const fullUserObj = (users ?? []).find(user => user && user.userId === u.userId);
+            const isUnqualified = fullUserObj && requiresQual ? !(fullUserObj.qualifiedStationIds ?? []).includes(shift.stationId) : false;
             const isMe = u.userId === loggedInUserId;
             const isCollision = u.isCollision === true;
 
@@ -220,7 +220,7 @@ const PlannerGrid: React.FC<Props> = ({
             <Box sx={{ display: 'grid', gridTemplateColumns: `180px repeat(${daysCount * 2}, minmax(60px, 1fr)) 180px` }}>
                 {/* HLAVIČKA */}
                 <Box sx={{ p: 2, fontWeight: 'bold', borderBottom: '2px solid #f0f0f0', bgcolor: '#fafafa', display: 'flex', alignItems: 'center', position: 'sticky', top: 0, zIndex: 10 }}>Stanoviště</Box>
-                {(scheduleData.days || []).map((day: DailyHours, idx: number) => {
+                {(scheduleData.days ?? []).map((day: DailyHours, idx: number) => {
                     const formatted = formatDateShort(day.date);
                     return (
                         <Box key={idx} sx={{ gridColumn: 'span 2', borderBottom: '2px solid #f0f0f0', borderLeft: '1px solid #f0f0f0', bgcolor: '#fafafa', position: 'sticky', top: 0, zIndex: 10 }}>
@@ -238,13 +238,13 @@ const PlannerGrid: React.FC<Props> = ({
                 <Box sx={{ p: 2, fontWeight: 'bold', borderBottom: '2px solid #f0f0f0', borderLeft: '1px solid #f0f0f0', bgcolor: '#fafafa', display: 'flex', alignItems: 'center', position: 'sticky', top: 0, zIndex: 10 }}>Stanoviště</Box>
 
                 {/* TĚLO GRIDU - KATEGORIE A STANOVIŠTĚ */}
-                {(hierarchy.categories || []).map((cat: HierarchyCategory) => (
+                {(hierarchy.categories ?? []).map((cat: HierarchyCategory) => (
                     <React.Fragment key={cat.id}>
                         <Box sx={{ gridColumn: '1 / -1', bgcolor: cat.color || '#f5f5f5', p: 1, pl: 3, fontWeight: 'bold', color: '#3e3535', fontSize: '0.85rem', textTransform: 'uppercase', borderBottom: '1px solid #eee' }}>
                             {cat.name}
                         </Box>
 
-                        {(cat.stations || []).map((stat: HierarchyStation) => {
+                        {(cat.stations ?? []).map((stat: HierarchyStation) => {
                             const customTimes = getStationCustomTimes(stat.id);
                             const StationLabel = (
                                 <Box sx={{ borderRight: '1px solid #eee', borderLeft: '1px solid #eee', borderBottom: '1px solid #eee', p: 1.5, display: 'flex', flexDirection: 'column', justifyContent: 'center', bgcolor: 'white' }}>
@@ -256,8 +256,8 @@ const PlannerGrid: React.FC<Props> = ({
                             return (
                                 <React.Fragment key={stat.id}>
                                     {StationLabel}
-                                    {(scheduleData.days || []).map((day: DailyHours) => {
-                                        const shiftsForDay = (scheduleData.shifts || []).filter(s => s.stationId === stat.id && s.shiftDate === day.date);
+                                    {(scheduleData.days ?? []).map((day: DailyHours) => {
+                                        const shiftsForDay = (scheduleData.shifts ?? []).filter(s => s.stationId === stat.id && s.shiftDate === day.date);
                                         const fullDayShifts: ScheduleShift[] = [];
                                         const morningShifts: ScheduleShift[] = [];
                                         const afternoonShifts: ScheduleShift[] = [];
@@ -265,6 +265,7 @@ const PlannerGrid: React.FC<Props> = ({
                                         shiftsForDay.forEach(s => {
                                             const hour = getHour(s.startTime);
                                             const endHour = getHour(s.endTime);
+
                                             if (hour < 12 && endHour >= 15) fullDayShifts.push(s);
                                             else if (hour >= 12) afternoonShifts.push(s);
                                             else morningShifts.push(s);
@@ -275,12 +276,12 @@ const PlannerGrid: React.FC<Props> = ({
 
                                         // VIZUALIZACE DOSTUPNOSTI A KVALIFIKACE PRO VYBRANÉHO UŽIVATELE
                                         if (selectedUser) {
-                                            const isQualified = !stat.needsQualification || (selectedUser.qualifiedStationIds || []).includes(stat.id);
+                                            const isQualified = !stat.needsQualification || (selectedUser.qualifiedStationIds ?? []).includes(stat.id);
                                             const avail = selectedUser.weekAvailability?.[day.date];
 
-                                            const userShiftsToday = (scheduleData.shifts || []).filter(s =>
+                                            const userShiftsToday = (scheduleData.shifts ?? []).filter(s =>
                                                 s.shiftDate === day.date &&
-                                                (s.assignedUsers || []).some(au => au.userId === selectedUser.userId)
+                                                (s.assignedUsers ?? []).some(au => au.userId === selectedUser.userId)
                                             );
 
                                             let hasMorning = false;
