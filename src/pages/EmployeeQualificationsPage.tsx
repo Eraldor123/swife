@@ -1,20 +1,22 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import {
-    Box, Typography, Paper, TextField, MenuItem, Select, FormControl, InputLabel,
+    Box, Typography, Paper, TextField,
     Table, TableBody, TableCell, TableContainer, TableHead, TableRow, TablePagination,
     IconButton, Dialog, DialogTitle, DialogContent, DialogActions, Button, Divider,
-    Avatar, Chip, Stack, FormControlLabel, Checkbox, InputAdornment, CircularProgress
+    Avatar, Chip, FormControlLabel, Checkbox, InputAdornment, CircularProgress
 } from '@mui/material';
 import {
     Edit as EditIcon,
     ArrowBack as ArrowBackIcon,
     Search as SearchIcon,
     Close as CloseIcon,
-    School as SchoolIcon
+    WorkspacePremium as WorkspacePremiumIcon
 } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
 
-// --- ROZHRANÍ (INTERFACES) ---
+import { styles } from '../theme/EmployeeQualificationsPage.styles';
+
+// --- ROZHRANÍ ---
 interface Station {
     id: number;
     name: string;
@@ -41,6 +43,8 @@ interface HierarchyCategory {
     stations: HierarchyStation[];
 }
 
+const filterOptions = ["VŠE", "HPP", "DPP", "OSVC"];
+
 const EmployeeQualificationsPage: React.FC = () => {
     const navigate = useNavigate();
 
@@ -48,7 +52,6 @@ const EmployeeQualificationsPage: React.FC = () => {
     const [stations, setStations] = useState<Station[]>([]);
     const [loading, setLoading] = useState(true);
 
-    // Stavy pro serverové stránkování (Fáze 2 Backend)
     const [searchQuery, setSearchQuery] = useState('');
     const [contractFilter, setContractFilter] = useState('VŠE');
     const [page, setPage] = useState(0);
@@ -59,71 +62,73 @@ const EmployeeQualificationsPage: React.FC = () => {
     const [selectedEmployee, setSelectedEmployee] = useState<Employee | null>(null);
     const [tempQualifications, setTempQualifications] = useState<number[]>([]);
 
-    /**
-     * HLAVNÍ OPRAVA: Načítání dat s podporou stránkování a ochranou proti NULL.
-     */
+    // 1. OPRAVENÝ FETCH - POSÍLÁ PARAMETRY NA BACKEND
     const fetchData = useCallback(async () => {
         setLoading(true);
         try {
-            // 1. Načtení stránkovaných zaměstnanců
-            const empRes = await fetch(`http://localhost:8080/api/v1/qualifications/employees?page=${page}&size=${rowsPerPage}`, {
+            // Sestavíme URL s novými parametry pro serverové filtrování
+            const searchParam = encodeURIComponent(searchQuery);
+            const url = `http://localhost:8080/api/v1/qualifications/employees?page=${page}&size=${rowsPerPage}&search=${searchParam}&contractType=${contractFilter}`;
+
+            const empRes = await fetch(url, {
                 credentials: 'include'
             });
+
             if (empRes.ok) {
                 const data = await empRes.json();
-                // Backend vrací Page objekt, data jsou v .content
                 setEmployees(data.content || []);
                 setTotalElements(data.totalElements || 0);
             }
 
-            // 2. Načtení hierarchie pro seznam stanovišť
-            const hierRes = await fetch('http://localhost:8080/api/v1/position-settings/hierarchy', {
-                credentials: 'include'
-            });
-            if (hierRes.ok) {
-                const hierData = await hierRes.json();
-                const qualStations: Station[] = [];
-
-                // BEZPEČNOSTNÍ OPRAVA: Přidány pojistky ?. a || [] proti chybě "reading forEach"
-                (hierData?.categories || []).forEach((cat: HierarchyCategory) => {
-                    (cat?.stations || []).forEach((stat: HierarchyStation) => {
-                        if (stat.needsQualification) {
-                            qualStations.push({
-                                id: stat.id,
-                                name: stat.name,
-                                needsQualification: true
-                            });
-                        }
-                    });
+            // Načtení stanovišť (stačí načítat jen když je pole prázdné, ale ponechávám tvou logiku)
+            if (stations.length === 0) {
+                const hierRes = await fetch('http://localhost:8080/api/v1/position-settings/hierarchy', {
+                    credentials: 'include'
                 });
-                setStations(qualStations);
+                if (hierRes.ok) {
+                    const hierData = await hierRes.json();
+                    const qualStations: Station[] = [];
+                    (hierData?.categories || []).forEach((cat: HierarchyCategory) => {
+                        (cat?.stations || []).forEach((stat: HierarchyStation) => {
+                            if (stat.needsQualification) {
+                                qualStations.push({ id: stat.id, name: stat.name, needsQualification: true });
+                            }
+                        });
+                    });
+                    setStations(qualStations);
+                }
             }
         } catch (error) {
             console.error("Chyba při načítání dat:", error);
         } finally {
             setLoading(false);
         }
-    }, [page, rowsPerPage]);
+    }, [page, rowsPerPage, searchQuery, contractFilter, stations.length]); // ZÁVISLOSTI AKTUALIZOVÁNY
 
+    // 2. DEBOUNCE (Ochrana proti spamování serveru)
     useEffect(() => {
-        void fetchData();
+        const timeoutId = setTimeout(() => {
+            void fetchData();
+        }, 500); // Počká 500ms od posledního stisku klávesy
+
+        return () => clearTimeout(timeoutId);
     }, [fetchData]);
 
-    // Filtrování na stažené stránce (pro lokální vyhledávání)
-    const filteredEmployees = (employees || []).filter(emp => {
-        const fullName = `${emp.firstName || ''} ${emp.lastName || ''}`.toLowerCase();
-        const matchesSearch = fullName.includes(searchQuery.toLowerCase());
-        const matchesContract = contractFilter === 'VŠE' || emp.contractType === contractFilter;
-        return matchesSearch && matchesContract;
-    });
-
-    const handleChangePage = (_e: unknown, newPage: number) => {
-        setPage(newPage);
-    };
-
+    const handleChangePage = (_e: unknown, newPage: number) => setPage(newPage);
     const handleChangeRowsPerPage = (event: React.ChangeEvent<HTMLInputElement>) => {
         setRowsPerPage(parseInt(event.target.value, 10));
         setPage(0);
+    };
+
+    // 3. Pomocné funkce pro reset stránky při změně filtru
+    const handleSearchChange = (event: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+        setSearchQuery(event.target.value);
+        setPage(0); // Při novém hledání skočíme na první stránku
+    };
+
+    const handleFilterChange = (option: string) => {
+        setContractFilter(option);
+        setPage(0); // Při změně úvazku skočíme na první stránku
     };
 
     const handleOpenEdit = (employee: Employee) => {
@@ -153,14 +158,16 @@ const EmployeeQualificationsPage: React.FC = () => {
                     emp.id === selectedEmployee.id ? { ...emp, qualifiedStationIds: tempQualifications } : emp
                 ));
                 setIsDialogOpen(false);
+            } else {
+                console.error("Backend vrátil chybu:", response.status);
             }
         } catch (error) {
             console.error("Chyba při ukládání kvalifikace:", error);
         }
     };
 
-    const getStationNames = (ids: number[]) => {
-        return (ids || []).map(id => stations.find(s => s.id === id)?.name).filter(Boolean).join(', ');
+    const getEmployeeStations = (ids: number[]) => {
+        return (ids || []).map(id => stations.find(s => s.id === id)).filter(Boolean) as Station[];
     };
 
     if (loading && employees.length === 0) {
@@ -168,116 +175,127 @@ const EmployeeQualificationsPage: React.FC = () => {
     }
 
     return (
-        <Box sx={{ maxWidth: '1400px', mx: 'auto', p: 3 }}>
-            <Paper elevation={0} sx={{ p: 3, mb: 4, borderRadius: 3, border: '1px solid #eaeaea', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-                    <IconButton onClick={() => navigate('/dashboard/shifts')} sx={{ bgcolor: 'rgba(0,0,0,0.05)' }}>
+        <Box sx={styles.container}>
+            <Paper elevation={0} sx={styles.headerCard}>
+                <Box sx={styles.headerLeft}>
+                    <IconButton onClick={() => navigate('/dashboard/shifts')} sx={styles.backButton}>
                         <ArrowBackIcon />
                     </IconButton>
                     <Box>
-                        <Typography variant="h4" sx={{ fontWeight: 'bold', color: '#3e3535' }}>
+                        <Typography variant="h1" sx={styles.pageTitle}>
                             Kvalifikace zaměstnanců
                         </Typography>
                         <Typography variant="body2" color="textSecondary">
-                            Správa oprávnění pro obsluhu kvalifikovaných stanovišť
+                            Správa oprávnění pro obsluhu stanovišť
                         </Typography>
                     </Box>
                 </Box>
-                <SchoolIcon sx={{ fontSize: 50, color: '#eaeaea' }} />
+                <WorkspacePremiumIcon sx={styles.headerIcon} />
             </Paper>
 
-            <Paper elevation={3} sx={{ borderRadius: 3, p: 3 }}>
-                <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} sx={{ mb: 3 }} justifyContent="space-between">
+            <Paper elevation={0} sx={styles.mainCard}>
+                <Box sx={styles.controlsContainer}>
                     <TextField
-                        label="Hledat na této stránce..."
+                        placeholder="Hledat jméno..."
                         variant="outlined"
                         size="small"
-                        sx={{ width: { xs: '100%', sm: '400px' } }}
+                        sx={styles.searchInput}
                         value={searchQuery}
-                        onChange={(e) => setSearchQuery(e.target.value)}
-                        InputProps={{ startAdornment: (<InputAdornment position="start"><SearchIcon color="action" /></InputAdornment>) }}
+                        onChange={handleSearchChange} // ZDE JE ZMĚNA
+                        InputProps={{ startAdornment: (<InputAdornment position="start"><SearchIcon color="action" fontSize="small" /></InputAdornment>) }}
                     />
 
-                    <FormControl size="small" sx={{ minWidth: 200, width: { xs: '100%', sm: 'auto' } }}>
-                        <InputLabel>Filtrovat úvazek</InputLabel>
-                        <Select
-                            value={contractFilter}
-                            label="Filtrovat úvazek"
-                            onChange={(e) => setContractFilter(e.target.value)}
-                        >
-                            <MenuItem value="VŠE"><em>Všechny úvazky</em></MenuItem>
-                            <MenuItem value="HPP">HPP</MenuItem>
-                            <MenuItem value="DPP">DPP</MenuItem>
-                            <MenuItem value="OSVC">OSVČ</MenuItem>
-                        </Select>
-                    </FormControl>
-                </Stack>
+                    <Box sx={styles.filterContainer}>
+                        <Typography variant="body2" color="textSecondary" sx={{ mr: 1, display: { xs: 'none', sm: 'block' } }}>
+                            Filtr úvazků:
+                        </Typography>
+                        {filterOptions.map(option => (
+                            <Chip
+                                key={option}
+                                label={option}
+                                onClick={() => handleFilterChange(option)} // ZDE JE ZMĚNA
+                                color={contractFilter === option ? "primary" : "default"}
+                                variant={contractFilter === option ? "filled" : "outlined"}
+                                sx={{ fontWeight: 600, borderRadius: 2 }}
+                                clickable
+                            />
+                        ))}
+                    </Box>
+                </Box>
 
-                <Divider sx={{ mb: 1 }} />
-
-                <TableContainer sx={{ position: 'relative' }}>
+                <TableContainer sx={styles.tableContainer}>
                     {loading && (
-                        <Box sx={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, bgcolor: 'rgba(255,255,255,0.5)', zIndex: 2, display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
+                        <Box sx={styles.loadingOverlay}>
                             <CircularProgress size={24} />
                         </Box>
                     )}
-                    <Table sx={{ minWidth: 650 }} size="small">
+                    <Table sx={{ minWidth: 650 }}>
                         <TableHead>
                             <TableRow>
-                                <TableCell sx={{ fontWeight: 'bold', py: 2 }}>Fotka</TableCell>
-                                <TableCell sx={{ fontWeight: 'bold' }}>Jméno a příjmení</TableCell>
-                                <TableCell sx={{ fontWeight: 'bold' }}>Typ úvazku</TableCell>
-                                <TableCell sx={{ fontWeight: 'bold' }}>Kvalifikace</TableCell>
-                                <TableCell sx={{ fontWeight: 'bold', textAlign: 'center' }}>Upravit</TableCell>
+                                <TableCell sx={styles.tableHeaderCell}>Zaměstnanec</TableCell>
+                                <TableCell sx={styles.tableHeaderCell}>Úvazek</TableCell>
+                                <TableCell sx={styles.tableHeaderCell}>Kvalifikace</TableCell>
+                                <TableCell sx={styles.tableHeaderCellCenter}>Akce</TableCell>
                             </TableRow>
                         </TableHead>
                         <TableBody>
-                            {filteredEmployees.length > 0 ? (
-                                filteredEmployees.map((emp) => (
-                                    <TableRow key={emp.id} hover sx={{ '&:last-child td, &:last-child th': { border: 0 } }}>
-                                        <TableCell sx={{ py: 1.5 }}>
-                                            <Avatar src={emp.photoUrl} sx={{ width: 40, height: 40, bgcolor: '#3e3535', fontSize: '1rem' }}>
-                                                {(emp.firstName?.[0] || '')}{(emp.lastName?.[0] || '')}
-                                            </Avatar>
-                                        </TableCell>
-                                        <TableCell sx={{ fontWeight: 'bold' }}>{emp.firstName} {emp.lastName}</TableCell>
-                                        <TableCell>
-                                            <Chip
-                                                label={emp.contractType !== 'N/A' ? emp.contractType : 'Bez smlouvy'}
-                                                size="small"
-                                                variant="outlined"
-                                                color={emp.contractType === 'DPP' ? 'primary' : 'default'}
-                                                sx={{ fontWeight: 'bold' }}
-                                            />
-                                        </TableCell>
-                                        <TableCell>
-                                            <Typography variant="body2" color="textSecondary" sx={{ maxWidth: '300px' }}>
-                                                {(emp.qualifiedStationIds?.length || 0) > 0
-                                                    ? getStationNames(emp.qualifiedStationIds)
-                                                    : <em style={{ color: '#bbb' }}>Žádná kvalifikace</em>
-                                                }
-                                            </Typography>
-                                        </TableCell>
-                                        <TableCell sx={{ textAlign: 'center' }}>
-                                            <IconButton color="primary" onClick={() => handleOpenEdit(emp)} size="small">
-                                                <EditIcon fontSize="small" />
-                                            </IconButton>
-                                        </TableCell>
-                                    </TableRow>
-                                ))
+                            {/* ZDE UŽ MAPUJEME ROVNOU POLE EMPLOYEES */}
+                            {employees.length > 0 ? (
+                                employees.map((emp) => {
+                                    const empStations = getEmployeeStations(emp.qualifiedStationIds);
+                                    return (
+                                        <TableRow key={emp.id} hover sx={styles.tableRow}>
+                                            <TableCell sx={styles.avatarCell}>
+                                                <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                                                    <Avatar src={emp.photoUrl} sx={styles.avatar}>
+                                                        {(emp.firstName?.[0] || '')}{(emp.lastName?.[0] || '')}
+                                                    </Avatar>
+                                                    <Typography sx={styles.nameCell}>{emp.firstName} {emp.lastName}</Typography>
+                                                </Box>
+                                            </TableCell>
+                                            <TableCell>
+                                                <Chip
+                                                    label={emp.contractType !== 'N/A' ? emp.contractType : 'Bez smlouvy'}
+                                                    size="small"
+                                                    sx={styles.getContractChipStyle(emp.contractType)}
+                                                />
+                                            </TableCell>
+                                            <TableCell>
+                                                {empStations.length > 0 ? (
+                                                    <Box sx={styles.qualificationsWrapper}>
+                                                        {empStations.map(station => (
+                                                            <Chip key={station.id} label={station.name} size="small" sx={styles.qualificationChip} />
+                                                        ))}
+                                                    </Box>
+                                                ) : (
+                                                    <Typography sx={styles.emptyQualText}>Žádná kvalifikace</Typography>
+                                                )}
+                                            </TableCell>
+                                            <TableCell align="center">
+                                                <Button
+                                                    variant="text"
+                                                    size="small"
+                                                    startIcon={<EditIcon />}
+                                                    onClick={() => handleOpenEdit(emp)}
+                                                    sx={styles.editButton}
+                                                >
+                                                    Nastavit
+                                                </Button>
+                                            </TableCell>
+                                        </TableRow>
+                                    );
+                                })
                             ) : (
                                 <TableRow>
-                                    <TableCell colSpan={5} sx={{ textAlign: 'center', py: 4 }}>
-                                        <SearchIcon sx={{ fontSize: 40, color: '#eee', mb: 1, display: 'block', mx: 'auto' }} />
-                                        Nenalezeni žádní zaměstnanci.
+                                    <TableCell colSpan={4} sx={styles.emptyTableState}>
+                                        <SearchIcon sx={styles.emptySearchIcon} />
+                                        <Typography variant="body1" color="textSecondary">Nenalezeni žádní zaměstnanci.</Typography>
                                     </TableCell>
                                 </TableRow>
                             )}
                         </TableBody>
                     </Table>
                 </TableContainer>
-
-                <Divider />
 
                 <TablePagination
                     rowsPerPageOptions={[5, 10, 25]}
@@ -289,44 +307,69 @@ const EmployeeQualificationsPage: React.FC = () => {
                     onRowsPerPageChange={handleChangeRowsPerPage}
                     labelRowsPerPage="Zobrazit řádků:"
                     labelDisplayedRows={({ from, to, count }) => `${from}-${to} z ${count}`}
+                    sx={{ borderTop: '1px solid #f0f0f0' }}
                 />
             </Paper>
 
-            {/* MODAL DIALOG */}
-            <Dialog open={isDialogOpen} onClose={() => setIsDialogOpen(false)} fullWidth maxWidth="xs" PaperProps={{ sx: { borderRadius: 3, p: 1 } }}>
-                <DialogTitle sx={{ fontWeight: 'bold', display: 'flex', justifyContent: 'space-between', alignItems: 'center', pb: 1 }}>
+            <Dialog open={isDialogOpen} onClose={() => setIsDialogOpen(false)} fullWidth maxWidth="sm" PaperProps={{ sx: styles.dialogPaper }}>
+                <DialogTitle sx={styles.dialogTitle}>
                     Upravit kvalifikace
-                    <IconButton onClick={() => setIsDialogOpen(false)} size="small"><CloseIcon fontSize="small" /></IconButton>
+                    <IconButton onClick={() => setIsDialogOpen(false)} size="small" sx={{ color: '#999' }}><CloseIcon fontSize="small" /></IconButton>
                 </DialogTitle>
-                <DialogContent sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
-                    <Box sx={{ bgcolor: '#f5f5f5', p: 2, borderRadius: 2, mb: 1, border: '1px solid #eaeaea', display: 'flex', alignItems: 'center', gap: 2 }}>
-                        <Avatar src={selectedEmployee?.photoUrl} sx={{ width: 45, height: 45, bgcolor: '#3e3535' }}>
+
+                <DialogContent sx={styles.dialogContent}>
+                    <Box sx={styles.dialogEmployeeInfo}>
+                        <Avatar src={selectedEmployee?.photoUrl} sx={styles.dialogAvatar}>
                             {selectedEmployee ? `${selectedEmployee.firstName?.[0] || ''}${selectedEmployee.lastName?.[0] || ''}` : ''}
                         </Avatar>
                         <Box>
-                            <Typography variant="subtitle1" fontWeight="bold">{selectedEmployee?.firstName} {selectedEmployee?.lastName}</Typography>
-                            <Typography variant="caption" color="textSecondary">Úvazek: {selectedEmployee?.contractType !== 'N/A' ? selectedEmployee?.contractType : 'Bez smlouvy'}</Typography>
+                            <Typography variant="subtitle1" fontWeight="bold" color="#2c3e50">
+                                {selectedEmployee?.firstName} {selectedEmployee?.lastName}
+                            </Typography>
+                            <Typography variant="caption" color="textSecondary">
+                                Úvazek: {selectedEmployee?.contractType !== 'N/A' ? selectedEmployee?.contractType : 'Bez smlouvy'}
+                            </Typography>
                         </Box>
                     </Box>
-                    <Typography variant="body2" color="textSecondary" sx={{ px: 1, mt: 1, fontWeight: 'bold' }}>Přiřazená stanoviště:</Typography>
-                    <Divider sx={{ mb: 1 }} />
-                    <Stack spacing={0.5} sx={{ px: 1, maxHeight: '300px', overflowY: 'auto' }}>
+
+                    <Divider />
+
+                    <Typography variant="body2" sx={styles.dialogSubtitle}>Vyberte povolená stanoviště:</Typography>
+
+                    <Box sx={styles.checkboxGrid}>
                         {(stations || []).length > 0 ? stations.map(station => (
                             <FormControlLabel
                                 key={station.id}
-                                control={<Checkbox checked={tempQualifications.includes(station.id)} onChange={() => handleToggleQualification(station.id)} color="primary" size="small" />}
+                                control={
+                                    <Checkbox
+                                        checked={tempQualifications.includes(station.id)}
+                                        onChange={() => handleToggleQualification(station.id)}
+                                        color="primary"
+                                        size="small"
+                                    />
+                                }
                                 label={station.name}
-                                sx={{ '& .MuiFormControlLabel-label': { fontSize: '0.95rem', fontWeight: tempQualifications.includes(station.id) ? 'bold' : 'normal', color: tempQualifications.includes(station.id) ? 'primary.main' : 'text.primary' } }}
+                                sx={{
+                                    ...styles.checkboxLabel,
+                                    '& .MuiFormControlLabel-label': {
+                                        fontWeight: tempQualifications.includes(station.id) ? 600 : 400,
+                                        color: tempQualifications.includes(station.id) ? '#2c3e50' : '#666'
+                                    }
+                                }}
                             />
                         )) : (
-                            <Typography variant="body2" color="textSecondary" sx={{ py: 2, textAlign: 'center' }}>V systému nejsou žádná stanoviště vyžadující kvalifikaci.</Typography>
+                            <Typography variant="body2" color="textSecondary">Žádná stanoviště k dispozici.</Typography>
                         )}
-                    </Stack>
+                    </Box>
                 </DialogContent>
-                <Divider sx={{ mt: 2 }} />
-                <DialogActions sx={{ p: 2.5, justifyContent: 'space-between' }}>
-                    <Button onClick={() => setIsDialogOpen(false)} color="inherit" variant="outlined" sx={{ borderRadius: 2 }}>ZRUŠIT</Button>
-                    <Button variant="contained" onClick={handleSaveQualifications} disabled={(stations || []).length === 0} sx={{ bgcolor: '#3e3535', color: 'white', fontWeight: 'bold', borderRadius: 2, px: 3, '&:hover': { bgcolor: '#2c2525' } }}>ULOŽIT ZMĚNY</Button>
+
+                <DialogActions sx={styles.dialogActions}>
+                    <Button onClick={() => setIsDialogOpen(false)} variant="outlined" sx={styles.cancelButton}>
+                        Zrušit
+                    </Button>
+                    <Button variant="contained" onClick={handleSaveQualifications} disabled={(stations || []).length === 0} sx={styles.saveButton}>
+                        Uložit změny
+                    </Button>
                 </DialogActions>
             </Dialog>
         </Box>

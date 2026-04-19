@@ -1,7 +1,12 @@
 import React, { useState } from 'react';
-import { Box, Typography, TextField, Button, Paper, MenuItem, FormControlLabel, Checkbox, Alert, ListItemText, Snackbar } from '@mui/material';
+import { Box, Typography, TextField, Button, Paper, MenuItem, FormControlLabel, Checkbox, Alert, ListItemText, Snackbar, IconButton } from '@mui/material';
 import { useNavigate } from 'react-router-dom';
 import CalculateIcon from '@mui/icons-material/Calculate';
+import ArrowBackIcon from '@mui/icons-material/ArrowBack';
+import PersonAddIcon from '@mui/icons-material/PersonAddAlt1';
+
+// Import stylů
+import { styles } from '../theme/UserRegistrationPage.styles';
 
 const accessLevelsOptions = [
     { value: 'BASIC', label: 'Brigádník (BASIC)' },
@@ -59,11 +64,8 @@ const UserRegistrationPage: React.FC = () => {
         }
     };
 
-    // OPRAVA: Funkce už vůbec neřeší 'event', bere si jen textový 'reason'
     const handleCloseSnackbar = (reason?: string) => {
-        if (reason === 'clickaway') {
-            return;
-        }
+        if (reason === 'clickaway') return;
         setSnackbarOpen(false);
     };
 
@@ -81,10 +83,8 @@ const UserRegistrationPage: React.FC = () => {
         try {
             const response = await fetch('http://localhost:8080/api/v1/auth/register', {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                credentials: 'include', // ZMĚNA: Přidáno odesílání HttpOnly cookies
+                headers: { 'Content-Type': 'application/json' },
+                credentials: 'include',
                 body: JSON.stringify({
                     ...formData,
                     hourlyWage: formData.hourlyWage ? parseFloat(formData.hourlyWage) : null,
@@ -122,31 +122,83 @@ const UserRegistrationPage: React.FC = () => {
     };
 
     return (
-        <Box sx={{ maxWidth: '800px', mx: 'auto' }}>
-            <Button onClick={() => navigate('/dashboard/users')} sx={{ mb: 2, color: '#3e3535' }}>
-                &larr; Zpět na přehled uživatelů
-            </Button>
+        <Box sx={styles.container}>
+            {/* 1. HORNÍ KARTA (Záhlaví) */}
+            <Paper elevation={0} sx={styles.headerCard}>
+                <Box sx={styles.headerLeft}>
+                    <IconButton onClick={() => navigate('/dashboard/users')} sx={styles.backButton}>
+                        <ArrowBackIcon />
+                    </IconButton>
+                    <Typography sx={styles.backText} onClick={() => navigate('/dashboard/users')}>
+                        Zpět na přehled
+                    </Typography>
+                </Box>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                    <Typography variant="h1" sx={styles.pageTitle}>
+                        Registrace nového uživatele
+                    </Typography>
+                    <PersonAddIcon sx={styles.headerIcon} />
+                </Box>
+            </Paper>
 
-            <Paper elevation={3} sx={{ p: 4, borderRadius: 3 }}>
-                <Typography variant="h5" sx={{ fontWeight: 'bold', mb: 4, color: '#3e3535' }}>
-                    Registrace nového uživatele
-                </Typography>
+            {/* 2. DOLNÍ KARTA (Samotný formulář) */}
+            <Paper elevation={0} sx={styles.mainCard}>
+                <Box component="form" onSubmit={handleSubmit} sx={styles.formContainer}>
 
-                <Box component="form" onSubmit={handleSubmit} sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
-                    <Box sx={{ display: 'flex', gap: 2 }}>
-                        <TextField label="Jméno *" name="firstName" value={formData.firstName} onChange={handleChange} required fullWidth />
-                        <TextField label="Příjmení *" name="lastName" value={formData.lastName} onChange={handleChange} required fullWidth />
-                    </Box>
-
-                    <Box sx={{ display: 'flex', gap: 2 }}>
-                        <TextField label="E-mail *" name="email" type="email" value={formData.email} onChange={handleChange} required fullWidth />
-                        <TextField label="Telefon" name="phone" value={formData.phone} onChange={handleChange} fullWidth />
-                    </Box>
-
-                    <Box sx={{ display: 'flex', gap: 2 }}>
+                    {/* ZÁKLADNÍ ÚDAJE */}
+                    <Box sx={styles.row}>
                         <TextField
+                            id="firstNameInput"
+                            sx={styles.textField}
+                            label="Jméno *"
+                            name="firstName"
+                            autoComplete="given-name"
+                            value={formData.firstName}
+                            onChange={handleChange}
+                            required
+                        />
+                        <TextField
+                            id="lastNameInput"
+                            sx={styles.textField}
+                            label="Příjmení *"
+                            name="lastName"
+                            autoComplete="family-name"
+                            value={formData.lastName}
+                            onChange={handleChange}
+                            required
+                        />
+                    </Box>
+
+                    <Box sx={styles.row}>
+                        <TextField
+                            id="emailInput"
+                            sx={styles.textField}
+                            label="E-mail *"
+                            name="email"
+                            type="email"
+                            autoComplete="email"
+                            value={formData.email}
+                            onChange={handleChange}
+                            required
+                        />
+                        <TextField
+                            id="phoneInput"
+                            sx={styles.textField}
+                            label="Telefon"
+                            name="phone"
+                            autoComplete="tel"
+                            value={formData.phone}
+                            onChange={handleChange}
+                        />
+                    </Box>
+
+                    {/* SMLOUVA A PŘÍSTUP */}
+                    <Box sx={styles.row}>
+                        <TextField
+                            id="contractTypeSelect"
+                            sx={styles.textField}
                             select label="Smluvní vztah *" name="contractType"
-                            value={formData.contractType} onChange={handleChange} required fullWidth
+                            value={formData.contractType} onChange={handleChange} required
                         >
                             <MenuItem value="DPP">DPP</MenuItem>
                             <MenuItem value="HPP">HPP</MenuItem>
@@ -154,9 +206,9 @@ const UserRegistrationPage: React.FC = () => {
                         </TextField>
 
                         <TextField
-                            select
-                            label="Úroveň přístupu *"
-                            name="accessLevels"
+                            id="accessLevelsSelect"
+                            sx={styles.textField}
+                            select label="Úroveň přístupu *" name="accessLevels"
                             value={formData.accessLevels}
                             onChange={(e) => {
                                 const value = e.target.value;
@@ -166,7 +218,6 @@ const UserRegistrationPage: React.FC = () => {
                                 }));
                             }}
                             required
-                            fullWidth
                             SelectProps={{
                                 multiple: true,
                                 renderValue: (selected) => (selected as string[])
@@ -176,27 +227,40 @@ const UserRegistrationPage: React.FC = () => {
                         >
                             {accessLevelsOptions.map((option) => (
                                 <MenuItem key={option.value} value={option.value}>
-                                    <Checkbox checked={formData.accessLevels.indexOf(option.value) > -1} />
+                                    <Checkbox
+                                        id={`checkbox-accessLevel-${option.value}`}
+                                        name={`accessLevels-${option.value}`}
+                                        sx={styles.checkbox}
+                                        checked={formData.accessLevels.indexOf(option.value) > -1}
+                                    />
                                     <ListItemText primary={option.label} />
                                 </MenuItem>
                             ))}
                         </TextField>
                     </Box>
 
-                    <Box sx={{ p: 2, bgcolor: '#f9f9f9', borderRadius: 2, border: '1px solid #e0e0e0' }}>
+                    {/* MZDOVÁ ČÁST */}
+                    <Box sx={styles.wageSection}>
+
+                        {/* DPP */}
                         {formData.contractType === 'DPP' && (
                             <TextField
+                                id="dppHourlyWage"
+                                sx={styles.textField}
                                 label="Hodinová mzda (Kč)" name="hourlyWage" type="number"
-                                value={formData.hourlyWage} onChange={handleChange} fullWidth
+                                value={formData.hourlyWage} onChange={handleChange}
                             />
                         )}
 
+                        {/* HPP */}
                         {formData.contractType === 'HPP' && (
-                            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
-                                <Box sx={{ display: 'flex', gap: 2 }}>
+                            <Box sx={styles.columnGroup}>
+                                <Box sx={styles.row}>
                                     <TextField
+                                        id="hppEmploymentWorkload"
+                                        sx={styles.textField}
                                         select label="Typ úvazku *" name="employmentWorkload"
-                                        value={formData.employmentWorkload} onChange={handleChange} required fullWidth
+                                        value={formData.employmentWorkload} onChange={handleChange} required
                                     >
                                         <MenuItem value="FULL_TIME">Plný úvazek (1.0)</MenuItem>
                                         <MenuItem value="PART_TIME_HALF">Poloviční úvazek (0.5)</MenuItem>
@@ -206,47 +270,58 @@ const UserRegistrationPage: React.FC = () => {
 
                                     {formData.employmentWorkload === 'CUSTOM' && (
                                         <TextField
+                                            id="hppCustomWorkload"
+                                            sx={styles.textField}
                                             label="Velikost úvazku (např. 0.8) *" name="customWorkload" type="number"
                                             inputProps={{ step: "0.1", min: "0.1", max: "1.0" }}
-                                            value={formData.customWorkload} onChange={handleChange} required fullWidth
+                                            value={formData.customWorkload} onChange={handleChange} required
                                         />
                                     )}
                                 </Box>
 
-                                <Box sx={{ display: 'flex', gap: 2, alignItems: 'center' }}>
+                                <Box sx={styles.calcRow}>
                                     <TextField
+                                        id="hppMonthlyWage"
+                                        sx={styles.textField}
                                         label="Měsíční mzda (Kč)" name="monthlyWage" type="number"
-                                        value={formData.monthlyWage} onChange={handleChange} fullWidth
+                                        value={formData.monthlyWage} onChange={handleChange}
                                     />
 
                                     <Button
                                         variant="outlined"
                                         onClick={calculateHourlyWage}
                                         startIcon={<CalculateIcon />}
-                                        sx={{ minWidth: '160px', height: '56px', borderColor: '#3e3535', color: '#3e3535' }}
+                                        sx={styles.calcButton}
                                     >
                                         Vypočítat hodinovku
                                     </Button>
 
                                     <TextField
+                                        id="hppHourlyWage"
+                                        sx={styles.textField}
                                         label="Průměrná hodinová mzda (Kč)" name="hourlyWage" type="number"
-                                        value={formData.hourlyWage} onChange={handleChange} fullWidth
+                                        value={formData.hourlyWage} onChange={handleChange}
                                     />
                                 </Box>
                             </Box>
                         )}
 
+                        {/* OSVČ */}
                         {formData.contractType === 'OSVC' && (
-                            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+                            <Box sx={styles.columnGroup}>
                                 <TextField
+                                    id="osvcIco"
+                                    sx={styles.textField}
                                     label="IČO *" name="ico" value={formData.ico}
-                                    onChange={handleChange} required={formData.contractType === 'OSVC'} fullWidth
+                                    onChange={handleChange} required={formData.contractType === 'OSVC'}
                                 />
 
-                                <Box sx={{ display: 'flex', gap: 2 }}>
+                                <Box sx={styles.row}>
                                     <TextField
+                                        id="osvcPaymentType"
+                                        sx={styles.textField}
                                         select label="Typ odměňování" name="paymentType"
-                                        value={formData.paymentType} onChange={handleChange} fullWidth
+                                        value={formData.paymentType} onChange={handleChange}
                                     >
                                         <MenuItem value="HODINOVA_SAZBA">Hodinová sazba</MenuItem>
                                         <MenuItem value="FIXNI_ODMENA">Fixní odměna (měsíčně)</MenuItem>
@@ -254,13 +329,17 @@ const UserRegistrationPage: React.FC = () => {
 
                                     {formData.paymentType === 'HODINOVA_SAZBA' ? (
                                         <TextField
+                                            id="osvcHourlyWage"
+                                            sx={styles.textField}
                                             label="Hodinová sazba (Kč)" name="hourlyWage" type="number"
-                                            value={formData.hourlyWage} onChange={handleChange} fullWidth
+                                            value={formData.hourlyWage} onChange={handleChange}
                                         />
                                     ) : (
                                         <TextField
+                                            id="osvcFixedReward"
+                                            sx={styles.textField}
                                             label="Fixní odměna (Kč)" name="fixedReward" type="number"
-                                            value={formData.fixedReward} onChange={handleChange} fullWidth
+                                            value={formData.fixedReward} onChange={handleChange}
                                         />
                                     )}
                                 </Box>
@@ -269,14 +348,21 @@ const UserRegistrationPage: React.FC = () => {
                     </Box>
 
                     <FormControlLabel
-                        control={<Checkbox name="sendPassword" checked={formData.sendPassword} onChange={handleChange} />}
+                        htmlFor="sendPasswordCheckbox"
+                        control={
+                            <Checkbox
+                                id="sendPasswordCheckbox"
+                                name="sendPassword"
+                                sx={styles.checkbox}
+                                checked={formData.sendPassword}
+                                onChange={handleChange}
+                            />
+                        }
                         label="Zaslat uživateli vygenerovaný PIN a přístupy na e-mail"
+                        sx={{ mt: 1 }}
                     />
 
-                    <Button
-                        type="submit" variant="contained"
-                        sx={{ mt: 2, height: '50px', bgcolor: '#3e3535', '&:hover': { bgcolor: '#1e1a1a' }, fontWeight: 'bold' }}
-                    >
+                    <Button type="submit" variant="contained" sx={styles.submitButton}>
                         Vytvořit uživatele
                     </Button>
                 </Box>
@@ -285,15 +371,13 @@ const UserRegistrationPage: React.FC = () => {
             <Snackbar
                 open={snackbarOpen}
                 autoHideDuration={3000}
-
                 onClose={(_, reason) => handleCloseSnackbar(reason)}
                 anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
             >
                 <Alert
-
                     onClose={() => handleCloseSnackbar()}
                     severity={status.type}
-                    sx={{ width: '100%', fontSize: '16px', fontWeight: 'bold' }}
+                    sx={styles.alert}
                     variant="filled"
                 >
                     {status.message}

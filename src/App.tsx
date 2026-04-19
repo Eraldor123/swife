@@ -3,7 +3,7 @@ import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-d
 import LoginPage from './pages/LoginPage';
 import WelcomePage from './pages/WelcomePage';
 import TerminalKiosk from './pages/TerminalKiosk';
-import DashboardLayout from './layouts/DashboardLayout';
+import DashboardLayout from './components/DashboardLayout.tsx';
 import AdminUsersDashboard from './pages/AdminUsersDashboard';
 import AdminShiftsDashboard from './pages/AdminShiftsDashboard';
 import UserRegistrationPage from './pages/UserRegistrationPage';

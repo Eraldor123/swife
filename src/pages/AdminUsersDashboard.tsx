@@ -1,40 +1,59 @@
 import React, { useMemo } from 'react';
-import { Box, Typography } from '@mui/material';
+import { Box, Typography, Button, Paper } from '@mui/material';
 import MenuCard from '../components/MenuCard';
-import { useAuth } from '../context/AuthContext'; // Import pro přístup k rolím
+import { useAuth } from '../context/AuthContext';
+import LogoutIcon from '@mui/icons-material/Logout';
+import AccountCircleIcon from '@mui/icons-material/AccountCircle'; // Ikona uživatele do hlavičky
+import PersonAddIcon from '@mui/icons-material/PersonAdd';
+import HistoryIcon from '@mui/icons-material/History';
+import { styles } from '../theme/DashboardMenu.styles';
 
 const AdminUsersDashboard: React.FC = () => {
-    const { userRoles } = useAuth(); // Získání rolí přihlášeného uživatele
+    const { userRoles, logout } = useAuth();
 
-    /**
-     * Logika pro zobrazení administrátorských karet.
-     * Karty uvidí pouze role ADMIN nebo MANAGEMENT.
-     */
     const isAdminOrManagement = useMemo(() => {
         if (!userRoles) return false;
-        // Očištění rolí od prefixu ROLE_ pro konzistenci[cite: 1]
         const cleanUserRoles = userRoles.map(r => r.replace('ROLE_', '').toUpperCase());
         return cleanUserRoles.some(role => ['ADMIN', 'MANAGEMENT'].includes(role));
     }, [userRoles]);
 
     return (
-        <Box>
-            <Typography variant="h5" sx={{ color: 'rgba(255,255,255,0.8)', fontWeight: 'bold', mb: 4, ml: 2 }}>
-                Uživatelé - Hlavní menu
-            </Typography>
+        <Box sx={styles.container}>
+            {/* NOVÁ TMAVÁ HLAVIČKA */}
+            <Paper elevation={0} sx={styles.headerCard}>
+                <Box sx={styles.headerLeft}>
+                    <AccountCircleIcon sx={styles.headerIcon} />
+                    <Typography variant="h5" sx={styles.pageTitle}>
+                        Uživatelé - Hlavní menu
+                    </Typography>
+                </Box>
 
-            <Box sx={{ display: 'flex', gap: 3, flexWrap: 'wrap', ml: 2 }}>
+                <Button
+                    variant="text"
+                    onClick={logout}
+                    startIcon={<LogoutIcon />}
+                    sx={styles.logoutButton}
+                >
+                    Odhlásit
+                </Button>
+            </Paper>
+
+            <Box sx={styles.cardsGrid}>
                 {isAdminOrManagement ? (
                     <>
-                        {/* Tyto karty se zobrazí pouze Adminovi a Managementu */}
-                        <MenuCard title="Registrace nového uživatele" navigateTo="/dashboard/users/register" />
-                        <MenuCard title="Nastavení uživatelů" navigateTo="/dashboard/users/settings" />
-                        <MenuCard title="Osobní údaje" navigateTo="/dashboard/users/profile" />
-                        <MenuCard title="Historie změn (Logy)" navigateTo="/dashboard/audit-logs" />
+                        <MenuCard
+                            title="Registrace nového uživatele"
+                            navigateTo="/dashboard/users/register"
+                            icon={<PersonAddIcon sx={{ fontSize: 'inherit' }} />}
+                        />
+                        <MenuCard
+                            title="Historie změn (Logy)"
+                            navigateTo="/dashboard/audit-logs"
+                            icon={<HistoryIcon sx={{ fontSize: 'inherit' }} />}
+                        />
                     </>
                 ) : (
-                    /* Zpráva pro Plánovače a Brigádníky, dokud nebudou mít vlastní funkce */
-                    <Typography sx={{ color: 'rgba(255,255,255,0.6)', fontStyle: 'italic', ml: 1 }}>
+                    <Typography sx={styles.emptyMessage}>
                         V této sekci momentálně nemáte dostupné žádné funkce.
                     </Typography>
                 )}

@@ -1,8 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { Box, Typography, Button, InputBase, CircularProgress } from '@mui/material';
-import LandscapeIcon from '@mui/icons-material/Landscape';
+import AlternateEmailIcon from '@mui/icons-material/AlternateEmail';
+import VpnKeyIcon from '@mui/icons-material/VpnKey';
 import { useAuth } from '../context/AuthContext';
+import { authStyles } from '../theme/auth.styles';
 
 const LoginPage: React.FC = () => {
     const [email, setEmail] = useState<string>('');
@@ -30,13 +32,12 @@ const LoginPage: React.FC = () => {
             const response = await fetch('http://localhost:8080/api/v1/auth/login', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                credentials: 'include', // ZMĚNA: Přidáno pro odesílání a ukládání cookies
+                credentials: 'include',
                 body: JSON.stringify({ email: email, password: password }),
             });
 
             if (response.ok) {
                 const data = await response.json();
-                // ZMĚNA: Smazáno data.token, token se nyní ukládá jako HttpOnly cookie
                 login(data.email, data.roles, data.userId);
 
                 if (data.roles && data.roles.includes('TERMINAL')) {
@@ -55,91 +56,78 @@ const LoginPage: React.FC = () => {
 
     if (isLoading) {
         return (
-            <Box sx={{ width: '100vw', height: '100vh', display: 'flex', justifyContent: 'center', alignItems: 'center', bgcolor: '#3e3535' }}>
-                <CircularProgress sx={{ color: 'white' }} />
+            <Box sx={authStyles.fullScreenLoading}>
+                <CircularProgress sx={{ color: '#3498db' }} />
             </Box>
         );
     }
 
     return (
-        <Box sx={{ width: '100vw', height: '100vh', display: 'flex', flexDirection: 'column', position: 'relative', overflow: 'hidden' }}>
-            <Box sx={{
-                position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, zIndex: -1,
-                background: 'linear-gradient(135deg, #e3c5d5 0%, #b8a3c9 50%, #9cb3d4 100%)'
-            }}>
+        <Box sx={authStyles.pageContainer}>
+            {/* 1. TMAVÁ SKLENĚNÁ HLAVIČKA */}
+            <Box sx={authStyles.header}>
+                <Typography sx={authStyles.logoText}>CompanyApp</Typography>
             </Box>
 
-            <Box sx={{ height: '80px', bgcolor: '#3e3535', display: 'flex', alignItems: 'center', px: 4 }}>
-                <LandscapeIcon sx={{ color: 'white', fontSize: 40, mr: 1 }} />
-                <Typography variant="h6" sx={{ color: 'white', fontWeight: 'bold', mt: 1 }}>
-                    skalkAPP
-                </Typography>
-            </Box>
-
-            <Box sx={{ flexGrow: 1, display: 'flex', justifyContent: 'center', alignItems: 'center', position: 'relative' }}>
-                <Box
-                    component="form"
-                    onSubmit={handleLogin}
-                    sx={{
-                        bgcolor: '#3e3535',
-                        borderRadius: 4,
-                        p: 4,
-                        width: '320px',
-                        display: 'flex',
-                        flexDirection: 'column',
-                        boxShadow: 3
-                    }}
-                >
-                    <Typography variant="h5" sx={{ color: 'white', fontWeight: 'bold', textAlign: 'center', mb: 3 }}>
-                        Přihlášení
+            {/* 2. VYCENTROVANÁ HLAVNÍ SKLENĚNÁ KARTA */}
+            <Box sx={authStyles.mainContent}>
+                <Box component="form" onSubmit={handleLogin} sx={authStyles.formBox}>
+                    <Typography variant="h5" sx={authStyles.formTitle}>
+                        Přihlášení do aplikace
                     </Typography>
 
-                    <Typography sx={{ color: 'white', textAlign: 'center', mb: 1, fontSize: '14px' }}>E-mail</Typography>
+                    <Typography component="label" htmlFor="email-input" sx={authStyles.inputLabel}>
+                        E-mail
+                    </Typography>
                     <InputBase
+                        id="email-input"
+                        name="email"
+                        autoComplete="email"
                         value={email}
                         onChange={(e) => setEmail(e.target.value)}
-                        sx={{ bgcolor: 'white', borderRadius: '20px', px: 2, py: 0.5, mb: 3 }}
+                        sx={authStyles.inputField}
+                        placeholder="Zadejte svůj e-mail"
                         required
                         type="email"
+                        startAdornment={<AlternateEmailIcon sx={authStyles.inputIcon} />}
                     />
 
-                    <Typography sx={{ color: 'white', textAlign: 'center', mb: 1, fontSize: '14px' }}>Heslo</Typography>
+                    <Typography component="label" htmlFor="password-input" sx={authStyles.inputLabel}>
+                        Heslo / PIN
+                    </Typography>
                     <InputBase
+                        id="password-input"
+                        name="password"
+                        autoComplete="current-password"
                         value={password}
                         onChange={(e) => setPassword(e.target.value)}
-                        sx={{ bgcolor: 'white', borderRadius: '20px', px: 2, py: 0.5, mb: 1 }}
+                        sx={{ ...authStyles.inputField, mb: 1 }}
+                        placeholder="••••••••"
                         required
                         type="password"
+                        startAdornment={<VpnKeyIcon sx={authStyles.inputIcon} />}
                     />
 
-                    {error && <Typography color="error" sx={{ fontSize: '12px', textAlign: 'center', mb: 2 }}>{error}</Typography>}
+                    {error && <Typography sx={authStyles.errorMessage}>{error}</Typography>}
 
-                    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mt: 2 }}>
-                        <Link
-                            to="/forgot-password"
-                            style={{ fontSize: '12px', color: '#9cb3d4', textDecoration: 'none' }}
-                        >
-                            Zapomněli jste heslo?
+                    <Box sx={{ display: 'flex', justifyContent: 'flex-end', mb: 3 }}>
+                        <Link to="/forgot-password" style={authStyles.link}>
+                            Zapomenuté heslo?
                         </Link>
-                        <Button
-                            type="submit"
-                            variant="contained"
-                            sx={{
-                                bgcolor: '#1e1a1a',
-                                color: 'white',
-                                borderRadius: '20px',
-                                textTransform: 'none',
-                                fontWeight: 'bold',
-                                '&:hover': { bgcolor: '#000000' }
-                            }}
-                        >
-                            Přihlásit se
-                        </Button>
                     </Box>
+
+                    <Button type="submit" variant="contained" sx={authStyles.submitButton}>
+                        Přihlásit se
+                    </Button>
                 </Box>
             </Box>
 
-            <Box sx={{ height: '80px', bgcolor: '#3e3535' }} />
+            {/* 3. TMAVÁ SKLENĚNÁ PATIČKA */}
+            <Box sx={authStyles.footer}>
+                <Typography sx={authStyles.footerText}>
+                    © {new Date().getFullYear()} Made by: Štěpán Ralenovský
+                </Typography>
+            </Box>
         </Box>
     );
 };

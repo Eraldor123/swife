@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
 import { Box, Typography, Button, InputBase, CircularProgress } from '@mui/material';
-import LandscapeIcon from '@mui/icons-material/Landscape';
+import AlternateEmailIcon from '@mui/icons-material/AlternateEmail';
 import { Link } from 'react-router-dom';
 import axios from 'axios';
+import { authStyles } from '../theme/auth.styles';
 
 const RequestReset: React.FC = () => {
     const [email, setEmail] = useState<string>('');
@@ -15,69 +16,60 @@ const RequestReset: React.FC = () => {
         setMessage(null);
 
         try {
+            // Backend nyní vrací 200 OK, i když mail neexistuje
             await axios.post('http://localhost:8080/api/v1/auth/password-reset/request', { email });
-            setMessage({ text: 'Pokud e-mail existuje, odeslali jsme instrukce k obnově.', isError: false });
+
+            // Vždy ukážeme tuto zprávu
+            setMessage({
+                text: 'Pokud je e-mail v našem systému zaregistrován, odeslali jsme na něj instrukce k obnově hesla.',
+                isError: false
+            });
         } catch (error) {
-            console.error(error);
-            setMessage({ text: 'Chyba při odesílání požadavku.', isError: true });
+            // I při chybě sítě nebo serveru nebudeme útočníkovi napovídat
+            console.error("Technická chyba při požadavku na reset:", error);
+            setMessage({
+                text: 'Pokud je e-mail v našem systému zaregistrován, odeslali jsme na něj instrukce k obnově hesla.',
+                isError: false
+            });
         } finally {
             setLoading(false);
+            setEmail(''); // Vymažeme pole pro profesionální dojem
         }
     };
 
     return (
-        <Box sx={{ width: '100vw', height: '100vh', display: 'flex', flexDirection: 'column', position: 'relative', overflow: 'hidden' }}>
-            {/* POZADÍ JAKO V LOGINU */}
-            <Box sx={{
-                position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, zIndex: -1,
-                background: 'linear-gradient(135deg, #e3c5d5 0%, #b8a3c9 50%, #9cb3d4 100%)'
-            }} />
+        <Box sx={authStyles.pageContainer}>
 
-            {/* HLAVIČKA */}
-            <Box sx={{ height: '80px', bgcolor: '#3e3535', display: 'flex', alignItems: 'center', px: 4 }}>
-                <LandscapeIcon sx={{ color: 'white', fontSize: 40, mr: 1 }} />
-                <Typography variant="h6" sx={{ color: 'white', fontWeight: 'bold', mt: 1 }}>
-                    skalkAPP
-                </Typography>
+            {/* 1. TMAVÁ SKLENĚNÁ HLAVIČKA S LOGEM */}
+            <Box sx={authStyles.header}>
+                <Typography sx={authStyles.logoText}>CompanyApp</Typography>
             </Box>
 
-            {/* HLAVNÍ OBSAH */}
-            <Box sx={{ flexGrow: 1, display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
-                <Box
-                    component="form"
-                    onSubmit={handleSubmit}
-                    sx={{
-                        bgcolor: '#3e3535',
-                        borderRadius: 4,
-                        p: 4,
-                        width: '350px',
-                        display: 'flex',
-                        flexDirection: 'column',
-                        boxShadow: 3
-                    }}
-                >
-                    <Typography variant="h5" sx={{ color: 'white', fontWeight: 'bold', textAlign: 'center', mb: 3 }}>
+            {/* 2. VYCENTROVANÁ HLAVNÍ SKLENĚNÁ KARTA */}
+            <Box sx={authStyles.mainContent}>
+                <Box component="form" onSubmit={handleSubmit} sx={authStyles.formBox}>
+                    <Typography variant="h5" sx={authStyles.formTitle}>
                         Obnova hesla
                     </Typography>
 
-                    <Typography sx={{ color: 'white', textAlign: 'center', mb: 1, fontSize: '14px' }}>E-mailová adresa</Typography>
+                    <Typography component="label" htmlFor="reset-email-input" sx={authStyles.inputLabel}>
+                        E-mailová adresa
+                    </Typography>
                     <InputBase
+                        id="reset-email-input"
+                        name="email"
+                        autoComplete="email"
                         value={email}
                         onChange={(e) => setEmail(e.target.value)}
-                        sx={{ bgcolor: 'white', borderRadius: '20px', px: 2, py: 0.5, mb: 2 }}
+                        sx={authStyles.inputField}
+                        placeholder="Zadejte svůj e-mail"
                         required
                         type="email"
-                        placeholder="Zadejte svůj e-mail"
+                        startAdornment={<AlternateEmailIcon sx={authStyles.inputIcon} />}
                     />
 
                     {message && (
-                        <Typography sx={{
-                            fontSize: '13px',
-                            textAlign: 'center',
-                            mb: 2,
-                            color: message.isError ? '#ef5350' : '#81c784',
-                            fontWeight: 'bold'
-                        }}>
+                        <Typography sx={message.isError ? authStyles.errorMessage : authStyles.successMessage}>
                             {message.text}
                         </Typography>
                     )}
@@ -86,27 +78,26 @@ const RequestReset: React.FC = () => {
                         type="submit"
                         disabled={loading}
                         variant="contained"
-                        sx={{
-                            bgcolor: '#1e1a1a',
-                            color: 'white',
-                            borderRadius: '20px',
-                            textTransform: 'none',
-                            fontWeight: 'bold',
-                            '&:hover': { bgcolor: '#000000' },
-                            mb: 2
-                        }}
+                        sx={{ ...authStyles.submitButton, mb: 3, mt: 1 }}
                     >
                         {loading ? <CircularProgress size={24} sx={{ color: 'white' }} /> : 'Odeslat odkaz'}
                     </Button>
 
-                    <Link to="/" style={{ fontSize: '13px', color: '#9cb3d4', textDecoration: 'none', textAlign: 'center' }}>
-                        &larr; Zpět na přihlášení
-                    </Link>
+                    <Box sx={{ display: 'flex', justifyContent: 'center' }}>
+                        <Link to="/" style={authStyles.link}>
+                            &larr; Zpět na přihlášení
+                        </Link>
+                    </Box>
                 </Box>
             </Box>
 
-            {/* PATIČKA */}
-            <Box sx={{ height: '80px', bgcolor: '#3e3535' }} />
+            {/* 3. TMAVÁ SKLENĚNÁ PATIČKA */}
+            <Box sx={authStyles.footer}>
+                <Typography sx={authStyles.footerText}>
+                    © {new Date().getFullYear()} Made by: Štěpán Ralenovský
+                </Typography>
+            </Box>
+
         </Box>
     );
 };

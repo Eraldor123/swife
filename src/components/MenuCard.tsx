@@ -1,39 +1,29 @@
 import React from 'react';
-import { Paper, Typography } from '@mui/material';
+import { Paper, Typography, Box } from '@mui/material';
 import { useNavigate } from 'react-router-dom';
+import { styles } from '../theme/DashboardMenu.styles'; // Uprav cestu podle svého projektu
 
 interface MenuCardProps {
     title: string;
     navigateTo: string;
+    icon: React.ReactNode; // Tato vlastnost umožní vkládat ikony (např. <SettingsIcon />)
 }
 
-const MenuCard: React.FC<MenuCardProps> = ({ title, navigateTo }) => {
+const MenuCard: React.FC<MenuCardProps> = ({ title, navigateTo, icon }) => {
     const navigate = useNavigate();
 
     return (
         <Paper
-            elevation={4}
+            elevation={0}
+            sx={styles.cardPaper}
             onClick={() => navigate(navigateTo)}
-            sx={{
-                width: '160px',
-                height: '160px',
-                bgcolor: '#2a2d34',
-                color: 'white',
-                borderRadius: '16px',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                textAlign: 'center',
-                p: 2,
-                cursor: 'pointer',
-                transition: 'transform 0.2s, background-color 0.2s',
-                '&:hover': {
-                    bgcolor: '#1e2025',
-                    transform: 'scale(1.05)',
-                },
-            }}
         >
-            <Typography sx={{ fontWeight: 'bold', fontSize: '16px' }}>
+            {/* Box pro ikonu - styluje se centrálně v DashboardMenu.styles.ts */}
+            <Box sx={styles.cardIcon}>
+                {icon}
+            </Box>
+
+            <Typography sx={styles.cardText}>
                 {title}
             </Typography>
         </Paper>

@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
 import { useSearchParams, useNavigate, Link } from 'react-router-dom';
 import { Box, Typography, Button, InputBase, CircularProgress } from '@mui/material';
-import LandscapeIcon from '@mui/icons-material/Landscape';
+import VpnKeyIcon from '@mui/icons-material/VpnKey';
 import axios from 'axios';
+import { authStyles } from '../theme/auth.styles';
 
 const ResetPassword: React.FC = () => {
     const [searchParams] = useSearchParams();
@@ -54,102 +55,89 @@ const ResetPassword: React.FC = () => {
     };
 
     return (
-        <Box sx={{ width: '100vw', height: '100vh', display: 'flex', flexDirection: 'column', position: 'relative', overflow: 'hidden' }}>
-            {/* POZADÍ */}
-            <Box sx={{
-                position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, zIndex: -1,
-                background: 'linear-gradient(135deg, #e3c5d5 0%, #b8a3c9 50%, #9cb3d4 100%)'
-            }} />
+        <Box sx={authStyles.pageContainer}>
 
-            {/* HLAVIČKA */}
-            <Box sx={{ height: '80px', bgcolor: '#3e3535', display: 'flex', alignItems: 'center', px: 4 }}>
-                <LandscapeIcon sx={{ color: 'white', fontSize: 40, mr: 1 }} />
-                <Typography variant="h6" sx={{ color: 'white', fontWeight: 'bold', mt: 1 }}>
-                    skalkAPP
-                </Typography>
+            <Box sx={authStyles.header}>
+                <Typography sx={authStyles.logoText}>CompanyApp</Typography>
             </Box>
 
-            {/* HLAVNÍ OBSAH */}
-            <Box sx={{ flexGrow: 1, display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
-                <Box
-                    component="form"
-                    onSubmit={handleSubmit}
-                    sx={{
-                        bgcolor: '#3e3535',
-                        borderRadius: 4,
-                        p: 4,
-                        width: '380px',
-                        display: 'flex',
-                        flexDirection: 'column',
-                        boxShadow: 3
-                    }}
-                >
-                    <Typography variant="h5" sx={{ color: 'white', fontWeight: 'bold', textAlign: 'center', mb: 3 }}>
+            {/* 2. VYCENTROVANÁ HLAVNÍ SKLENĚNÁ KARTA */}
+            <Box sx={authStyles.mainContent}>
+                <Box component="form" onSubmit={handleSubmit} sx={authStyles.formBox}>
+                    <Typography variant="h5" sx={authStyles.formTitle}>
                         Nové heslo
                     </Typography>
 
-                    <Typography sx={{ color: 'white', textAlign: 'center', mb: 1, fontSize: '14px' }}>Zadejte nové heslo</Typography>
+                    <Typography component="label" htmlFor="new-password-input" sx={authStyles.inputLabel}>
+                        Nové heslo
+                    </Typography>
                     <InputBase
+                        id="new-password-input"
+                        name="newPassword"
+                        autoComplete="new-password"
                         value={newPassword}
                         onChange={(e) => setNewPassword(e.target.value)}
-                        sx={{ bgcolor: 'white', borderRadius: '20px', px: 2, py: 0.5, mb: 1 }}
+                        sx={{ ...authStyles.inputField, mb: 1 }}
+                        placeholder="Zadejte nové heslo"
                         required
                         type="password"
+                        startAdornment={<VpnKeyIcon sx={authStyles.inputIcon} />}
                     />
 
-                    {/* Vizuální nápověda pro pravidla hesla */}
-                    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5, mb: 2, px: 2 }}>
-                        <Typography sx={{ fontSize: '12px', color: newPassword.length >= 8 ? '#81c784' : '#ffb74d', transition: 'color 0.3s' }}>
+                    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5, mb: 3, ml: 1 }}>
+                        <Typography sx={{ fontSize: '12px', color: newPassword.length >= 8 ? '#4ade80' : '#a0aec0', transition: 'color 0.3s' }}>
                             {newPassword.length >= 8 ? '✓' : '○'} Alespoň 8 znaků
                         </Typography>
-                        <Typography sx={{ fontSize: '12px', color: /[A-Z]/.test(newPassword) ? '#81c784' : '#ffb74d', transition: 'color 0.3s' }}>
+                        <Typography sx={{ fontSize: '12px', color: /[A-Z]/.test(newPassword) ? '#4ade80' : '#a0aec0', transition: 'color 0.3s' }}>
                             {/[A-Z]/.test(newPassword) ? '✓' : '○'} Obsahuje velké písmeno
                         </Typography>
-                        <Typography sx={{ fontSize: '12px', color: /[0-9]/.test(newPassword) ? '#81c784' : '#ffb74d', transition: 'color 0.3s' }}>
+                        <Typography sx={{ fontSize: '12px', color: /[0-9]/.test(newPassword) ? '#4ade80' : '#a0aec0', transition: 'color 0.3s' }}>
                             {/[0-9]/.test(newPassword) ? '✓' : '○'} Obsahuje číslici
                         </Typography>
                     </Box>
 
-                    <Typography sx={{ color: 'white', textAlign: 'center', mb: 1, fontSize: '14px' }}>Potvrzení hesla</Typography>
+                    <Typography component="label" htmlFor="confirm-password-input" sx={authStyles.inputLabel}>
+                        Potvrzení hesla
+                    </Typography>
                     <InputBase
+                        id="confirm-password-input"
+                        name="confirmPassword"
+                        autoComplete="new-password"
                         value={confirmPassword}
                         onChange={(e) => setConfirmPassword(e.target.value)}
-                        sx={{ bgcolor: 'white', borderRadius: '20px', px: 2, py: 0.5, mb: 3 }}
+                        sx={authStyles.inputField}
+                        placeholder="Zopakujte heslo"
                         required
                         type="password"
+                        startAdornment={<VpnKeyIcon sx={authStyles.inputIcon} />}
                     />
 
-                    {error && (
-                        <Typography sx={{ fontSize: '13px', textAlign: 'center', mb: 2, color: '#ef5350', fontWeight: 'bold' }}>
-                            {error}
-                        </Typography>
-                    )}
+                    {error && <Typography sx={authStyles.errorMessage}>{error}</Typography>}
 
                     <Button
                         type="submit"
                         disabled={loading}
                         variant="contained"
-                        sx={{
-                            bgcolor: '#1e1a1a',
-                            color: 'white',
-                            borderRadius: '20px',
-                            textTransform: 'none',
-                            fontWeight: 'bold',
-                            '&:hover': { bgcolor: '#000000' },
-                            mb: 2
-                        }}
+                        sx={{ ...authStyles.submitButton, mb: 3, mt: 1 }}
                     >
                         {loading ? <CircularProgress size={24} sx={{ color: 'white' }} /> : 'Uložit heslo'}
                     </Button>
 
-                    <Link to="/" style={{ fontSize: '13px', color: '#9cb3d4', textDecoration: 'none', textAlign: 'center' }}>
-                        Zrušit a vrátit se na přihlášení
-                    </Link>
+                    <Box sx={{ display: 'flex', justifyContent: 'center' }}>
+                        <Link to="/" style={authStyles.link}>
+                            Zrušit a vrátit se na přihlášení
+                        </Link>
+                    </Box>
                 </Box>
             </Box>
 
-            {/* PATIČKA */}
-            <Box sx={{ height: '80px', bgcolor: '#3e3535' }} />
+            {/* 3. TMAVÁ SKLENĚNÁ PATIČKA */}
+            <Box sx={authStyles.footer}>
+                <Typography sx={authStyles.footerText}>
+                    © {new Date().getFullYear()} Made by: Štěpán Ralenovský
+                </Typography>
+            </Box>
+
         </Box>
     );
 };
