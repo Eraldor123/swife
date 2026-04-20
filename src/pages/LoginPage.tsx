@@ -1,10 +1,12 @@
 import React, { useState, useEffect } from 'react';
+import { isAxiosError } from 'axios';
 import { useNavigate, Link } from 'react-router-dom';
 import { Box, Typography, Button, InputBase, CircularProgress } from '@mui/material';
 import AlternateEmailIcon from '@mui/icons-material/AlternateEmail';
 import VpnKeyIcon from '@mui/icons-material/VpnKey';
 import { useAuth } from '../context/AuthContext';
 import { authStyles } from '../theme/auth.styles';
+import apiClient from '../api/axiosConfig'; // PŘIDÁNO: Import nového klienta
 
 const LoginPage: React.FC = () => {
     const [email, setEmail] = useState<string>('');
@@ -24,36 +26,44 @@ const LoginPage: React.FC = () => {
         }
     }, [isAuthenticated, userRoles, navigate]);
 
-    const handleLogin = async (e: React.FormEvent<HTMLFormElement>) => {
+    // 1. OPRAVA: Použití React.SyntheticEvent místo deprecated FormEvent
+    const handleLogin = async (e: React.SyntheticEvent<HTMLFormElement>) => {
         e.preventDefault();
         setError('');
 
         try {
-            const response = await fetch('http://localhost:8080/api/v1/auth/login', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                credentials: 'include',
-                body: JSON.stringify({ email: email, password: password }),
+            const response = await apiClient.post('/auth/login', {
+                email: email,
+                password: password
             });
 
-            if (response.ok) {
-                const data = await response.json();
-                login(data.email, data.roles, data.userId);
+            if (response.status === 200) {
+                const data = response.data;
+                login(data.email, data.roles || [], data.userId);
 
                 if (data.roles && data.roles.includes('TERMINAL')) {
                     navigate('/terminal');
                 } else {
                     navigate('/dashboard');
                 }
-            } else {
-                setError('Neplatný e-mail nebo heslo.');
             }
-        } catch (err) {
-            console.log(err);
-            setError('Chyba při komunikaci se serverem.');
+        } catch (err: unknown) {
+            // 2. OPRAVA: err: unknown místo err: any
+            console.error('Chyba průběhu přihlášení:', err);
+
+            // 3. OPRAVA: Type Guard - ověříme, že chyba opravdu pochází z Axiosu
+            if (isAxiosError(err)) {
+                if (err.response && (err.response.status === 401 || err.response.status === 403)) {
+                    setError('Neplatný e-mail nebo heslo.');
+                } else {
+                    setError('Chyba při komunikaci se serverem.');
+                }
+            } else {
+                // Fallback pro případ, že chyba nevznikla v síti (např. spadl JavaScript)
+                setError('Vyskytla se nečekaná chyba.');
+            }
         }
     };
-
     if (isLoading) {
         return (
             <Box sx={authStyles.fullScreenLoading}>

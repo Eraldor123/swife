@@ -14,6 +14,11 @@ import {
 } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
 
+// Technické importy
+import apiClient from '../api/axiosConfig';
+import { useNotification } from '../context/NotificationContext';
+import { isAxiosError } from 'axios';
+
 import { styles } from '../theme/EmployeeQualificationsPage.styles';
 
 // --- ROZHRANÍ ---
@@ -43,10 +48,15 @@ interface HierarchyCategory {
     stations: HierarchyStation[];
 }
 
+interface BackendError {
+    message?: string;
+}
+
 const filterOptions = ["VŠE", "HPP", "DPP", "OSVC"];
 
 const EmployeeQualificationsPage: React.FC = () => {
     const navigate = useNavigate();
+    const { showNotification } = useNotification();
 
     const [employees, setEmployees] = useState<Employee[]>([]);
     const [stations, setStations] = useState<Station[]>([]);
@@ -62,33 +72,30 @@ const EmployeeQualificationsPage: React.FC = () => {
     const [selectedEmployee, setSelectedEmployee] = useState<Employee | null>(null);
     const [tempQualifications, setTempQualifications] = useState<number[]>([]);
 
-    // 1. OPRAVENÝ FETCH - POSÍLÁ PARAMETRY NA BACKEND
+    // 1. NAČÍTÁNÍ DAT PŘES API CLIENT
     const fetchData = useCallback(async () => {
         setLoading(true);
         try {
-            // Sestavíme URL s novými parametry pro serverové filtrování
-            const searchParam = encodeURIComponent(searchQuery);
-            const url = `http://localhost:8080/api/v1/qualifications/employees?page=${page}&size=${rowsPerPage}&search=${searchParam}&contractType=${contractFilter}`;
-
-            const empRes = await fetch(url, {
-                credentials: 'include'
+            // Axios automaticky kóduje parametry, nemusíme používat encodeURIComponent
+            const empRes = await apiClient.get('/qualifications/employees', {
+                params: {
+                    page: page,
+                    size: rowsPerPage,
+                    search: searchQuery,
+                    contractType: contractFilter
+                }
             });
 
-            if (empRes.ok) {
-                const data = await empRes.json();
-                setEmployees(data.content || []);
-                setTotalElements(data.totalElements || 0);
+            if (empRes.status === 200) {
+                setEmployees(empRes.data.content || []);
+                setTotalElements(empRes.data.totalElements || 0);
             }
 
-            // Načtení stanovišť (stačí načítat jen když je pole prázdné, ale ponechávám tvou logiku)
             if (stations.length === 0) {
-                const hierRes = await fetch('http://localhost:8080/api/v1/position-settings/hierarchy', {
-                    credentials: 'include'
-                });
-                if (hierRes.ok) {
-                    const hierData = await hierRes.json();
+                const hierRes = await apiClient.get('/position-settings/hierarchy');
+                if (hierRes.status === 200) {
                     const qualStations: Station[] = [];
-                    (hierData?.categories || []).forEach((cat: HierarchyCategory) => {
+                    (hierRes.data?.categories || []).forEach((cat: HierarchyCategory) => {
                         (cat?.stations || []).forEach((stat: HierarchyStation) => {
                             if (stat.needsQualification) {
                                 qualStations.push({ id: stat.id, name: stat.name, needsQualification: true });
@@ -100,16 +107,16 @@ const EmployeeQualificationsPage: React.FC = () => {
             }
         } catch (error) {
             console.error("Chyba při načítání dat:", error);
+            showNotification('Nepodařilo se načíst data zaměstnanců.', 'error');
         } finally {
             setLoading(false);
         }
-    }, [page, rowsPerPage, searchQuery, contractFilter, stations.length]); // ZÁVISLOSTI AKTUALIZOVÁNY
+    }, [page, rowsPerPage, searchQuery, contractFilter, stations.length, showNotification]);
 
-    // 2. DEBOUNCE (Ochrana proti spamování serveru)
     useEffect(() => {
         const timeoutId = setTimeout(() => {
             void fetchData();
-        }, 500); // Počká 500ms od posledního stisku klávesy
+        }, 500);
 
         return () => clearTimeout(timeoutId);
     }, [fetchData]);
@@ -120,15 +127,14 @@ const EmployeeQualificationsPage: React.FC = () => {
         setPage(0);
     };
 
-    // 3. Pomocné funkce pro reset stránky při změně filtru
     const handleSearchChange = (event: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
         setSearchQuery(event.target.value);
-        setPage(0); // Při novém hledání skočíme na první stránku
+        setPage(0);
     };
 
     const handleFilterChange = (option: string) => {
         setContractFilter(option);
-        setPage(0); // Při změně úvazku skočíme na první stránku
+        setPage(0);
     };
 
     const handleOpenEdit = (employee: Employee) => {
@@ -143,26 +149,29 @@ const EmployeeQualificationsPage: React.FC = () => {
         );
     };
 
+    // 2. UKLÁDÁNÍ KVALIFIKACÍ PŘES API CLIENT
     const handleSaveQualifications = async () => {
         if (!selectedEmployee) return;
         try {
-            const response = await fetch(`http://localhost:8080/api/v1/qualifications/users/${selectedEmployee.id}`, {
-                method: 'PUT',
-                headers: { 'Content-Type': 'application/json' },
-                credentials: 'include',
-                body: JSON.stringify({ qualificationIds: tempQualifications })
+            const response = await apiClient.put(`/qualifications/users/${selectedEmployee.id}`, {
+                qualificationIds: tempQualifications
             });
 
-            if (response.ok) {
+            if (response.status === 200) {
                 setEmployees(prev => prev.map(emp =>
                     emp.id === selectedEmployee.id ? { ...emp, qualifiedStationIds: tempQualifications } : emp
                 ));
+                showNotification('Kvalifikace byly úspěšně aktualizovány.', 'success');
                 setIsDialogOpen(false);
-            } else {
-                console.error("Backend vrátil chybu:", response.status);
             }
-        } catch (error) {
+        } catch (error: unknown) {
             console.error("Chyba při ukládání kvalifikace:", error);
+            if (isAxiosError(error)) {
+                const errorData = error.response?.data as BackendError;
+                showNotification(errorData?.message || 'Chyba při ukládání změn.', 'error');
+            } else {
+                showNotification('Chyba spojení se serverem.', 'error');
+            }
         }
     };
 
@@ -201,8 +210,16 @@ const EmployeeQualificationsPage: React.FC = () => {
                         size="small"
                         sx={styles.searchInput}
                         value={searchQuery}
-                        onChange={handleSearchChange} // ZDE JE ZMĚNA
-                        InputProps={{ startAdornment: (<InputAdornment position="start"><SearchIcon color="action" fontSize="small" /></InputAdornment>) }}
+                        onChange={handleSearchChange}
+                        slotProps={{
+                            input: {
+                                startAdornment: (
+                                    <InputAdornment position="start">
+                                        <SearchIcon color="action" fontSize="small" />
+                                    </InputAdornment>
+                                )
+                            }
+                        }}
                     />
 
                     <Box sx={styles.filterContainer}>
@@ -213,7 +230,7 @@ const EmployeeQualificationsPage: React.FC = () => {
                             <Chip
                                 key={option}
                                 label={option}
-                                onClick={() => handleFilterChange(option)} // ZDE JE ZMĚNA
+                                onClick={() => handleFilterChange(option)}
                                 color={contractFilter === option ? "primary" : "default"}
                                 variant={contractFilter === option ? "filled" : "outlined"}
                                 sx={{ fontWeight: 600, borderRadius: 2 }}
@@ -239,7 +256,6 @@ const EmployeeQualificationsPage: React.FC = () => {
                             </TableRow>
                         </TableHead>
                         <TableBody>
-                            {/* ZDE UŽ MAPUJEME ROVNOU POLE EMPLOYEES */}
                             {employees.length > 0 ? (
                                 employees.map((emp) => {
                                     const empStations = getEmployeeStations(emp.qualifiedStationIds);
@@ -311,7 +327,7 @@ const EmployeeQualificationsPage: React.FC = () => {
                 />
             </Paper>
 
-            <Dialog open={isDialogOpen} onClose={() => setIsDialogOpen(false)} fullWidth maxWidth="sm" PaperProps={{ sx: styles.dialogPaper }}>
+            <Dialog open={isDialogOpen} onClose={() => setIsDialogOpen(false)} fullWidth maxWidth="sm" slotProps={{ paper: { sx: styles.dialogPaper } }}>
                 <DialogTitle sx={styles.dialogTitle}>
                     Upravit kvalifikace
                     <IconButton onClick={() => setIsDialogOpen(false)} size="small" sx={{ color: '#999' }}><CloseIcon fontSize="small" /></IconButton>

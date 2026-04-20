@@ -1,13 +1,22 @@
-import React, { useState } from 'react';
+import React, { useState, type SyntheticEvent } from 'react';
 import { useSearchParams, useNavigate, Link } from 'react-router-dom';
 import { Box, Typography, Button, InputBase, CircularProgress } from '@mui/material';
 import VpnKeyIcon from '@mui/icons-material/VpnKey';
-import axios from 'axios';
 import { authStyles } from '../theme/auth.styles';
+
+// Technické importy
+import apiClient from '../api/axiosConfig';
+import { useNotification } from '../context/NotificationContext';
+import { isAxiosError } from 'axios';
+
+interface BackendError {
+    message?: string;
+}
 
 const ResetPassword: React.FC = () => {
     const [searchParams] = useSearchParams();
     const navigate = useNavigate();
+    const { showNotification } = useNotification();
     const token = searchParams.get('token');
 
     const [newPassword, setNewPassword] = useState<string>('');
@@ -19,7 +28,8 @@ const ResetPassword: React.FC = () => {
         return pass.length >= 8 && /[A-Z]/.test(pass) && /[0-9]/.test(pass);
     };
 
-    const handleSubmit = async (e: React.FormEvent) => {
+    // OPRAVA: Použití SyntheticEvent pro odstranění deprecace FormEvent
+    const handleSubmit = async (e: SyntheticEvent) => {
         e.preventDefault();
         setError(null);
 
@@ -40,15 +50,22 @@ const ResetPassword: React.FC = () => {
 
         setLoading(true);
         try {
-            await axios.post('http://localhost:8080/api/v1/auth/password-reset/confirm', {
+            // NÁHRADA: Použití apiClient místo raw axiosu
+            await apiClient.post('/auth/password-reset/confirm', {
                 token,
                 newPassword
             });
-            alert('Heslo bylo úspěšně změněno! Nyní se můžete přihlásit.');
+
+            showNotification('Heslo bylo úspěšně změněno! Nyní se můžete přihlásit.', 'success');
             navigate('/');
-        } catch (err) {
+        } catch (err: unknown) {
             console.error(err);
-            setError('Odkaz je neplatný nebo již vypršel.');
+            if (isAxiosError(err)) {
+                const errorData = err.response?.data as BackendError;
+                setError(errorData?.message || 'Odkaz je neplatný nebo již vypršel.');
+            } else {
+                setError('Vyskytla se neočekávaná chyba.');
+            }
         } finally {
             setLoading(false);
         }
@@ -61,7 +78,6 @@ const ResetPassword: React.FC = () => {
                 <Typography sx={authStyles.logoText}>CompanyApp</Typography>
             </Box>
 
-            {/* 2. VYCENTROVANÁ HLAVNÍ SKLENĚNÁ KARTA */}
             <Box sx={authStyles.mainContent}>
                 <Box component="form" onSubmit={handleSubmit} sx={authStyles.formBox}>
                     <Typography variant="h5" sx={authStyles.formTitle}>
@@ -131,7 +147,6 @@ const ResetPassword: React.FC = () => {
                 </Box>
             </Box>
 
-            {/* 3. TMAVÁ SKLENĚNÁ PATIČKA */}
             <Box sx={authStyles.footer}>
                 <Typography sx={authStyles.footerText}>
                     © {new Date().getFullYear()} Made by: Štěpán Ralenovský

@@ -11,6 +11,11 @@ import {
 } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
 
+// Technické importy
+import apiClient from '../api/axiosConfig';
+import { useNotification } from '../context/NotificationContext';
+import { isAxiosError } from 'axios';
+
 import { styles } from '../theme/AuditLogsPage.styles';
 
 interface AuditLog {
@@ -23,7 +28,11 @@ interface AuditLog {
     details: string;
 }
 
-// 1. MAPOVÁNÍ: České popisky do UI -> Anglické názvy entit do Databáze
+interface BackendError {
+    message?: string;
+}
+
+// 1. MAPOVÁNÍ
 const moduleMapping: Record<string, string> = {
     "VŠE": "",
     "Zaměstnanci": "User",
@@ -31,62 +40,62 @@ const moduleMapping: Record<string, string> = {
     "Směny": "Shift",
     "Obsazování": "ShiftAssignment",
     "Přístupy": "Auth",
-    "Nastavení provozu": "OperatingHours", // PŘIDÁNO: Z naší předchozí úpravy backendu
-    "Dostupnosti": "Availability"          // PŘIDÁNO: Pro tvůj budoucí systém dostupností
+    "Nastavení provozu": "OperatingHours",
+    "Dostupnosti": "Availability"
 };
 
-// Vytáhneme si jen ty české názvy pro tlačítka (Chips)
 const filterOptions = Object.keys(moduleMapping);
 
 const AuditLogsPage: React.FC = () => {
     const navigate = useNavigate();
+    const { showNotification } = useNotification();
 
     const [logs, setLogs] = useState<AuditLog[]>([]);
     const [loading, setLoading] = useState<boolean>(true);
     const [error, setError] = useState<string | null>(null);
 
-    // Stavy stránkování
     const [page, setPage] = useState(0);
     const [rowsPerPage, setRowsPerPage] = useState(15);
     const [totalElements, setTotalElements] = useState(0);
 
-    // Stavy filtrování (ukládá se český název)
     const [searchQuery, setSearchQuery] = useState('');
     const [moduleFilter, setModuleFilter] = useState('VŠE');
 
-    // Volání API s novými parametry
+    // NAČÍTÁNÍ LOGŮ PŘES API CLIENT
     const fetchLogs = useCallback(async () => {
         setLoading(true);
         try {
-            const searchParam = encodeURIComponent(searchQuery);
-
-            // 2. PŘEVOD: Tady se český název převede na anglickou entitu pro backend
             const mappedModule = moduleMapping[moduleFilter] || "";
 
-            const url = `http://localhost:8080/api/v1/audit-logs?page=${page}&size=${rowsPerPage}&search=${searchParam}&module=${mappedModule}`;
-
-            const response = await fetch(url, {
-                method: 'GET',
-                credentials: 'include'
+            const response = await apiClient.get('/audit-logs', {
+                params: {
+                    page: page,
+                    size: rowsPerPage,
+                    search: searchQuery,
+                    module: mappedModule
+                }
             });
 
-            if (response.ok) {
-                const data = await response.json();
-                setLogs(data.content || []);
-                setTotalElements(data.totalElements || 0);
+            if (response.status === 200) {
+                setLogs(response.data.content || []);
+                setTotalElements(response.data.totalElements || 0);
                 setError(null);
-            } else {
-                setError("Nemáte oprávnění k prohlížení logů nebo nastala chyba.");
             }
-        } catch (err) {
+        } catch (err: unknown) {
             console.error("Chyba při načítání logů", err);
-            setError("Nepodařilo se načíst historii změn ze serveru.");
+            if (isAxiosError(err)) {
+                const errorData = err.response?.data as BackendError;
+                const message = errorData?.message || "Nemáte oprávnění k prohlížení logů nebo nastala chyba.";
+                setError(message);
+                showNotification(message, 'error');
+            } else {
+                setError("Nepodařilo se načíst historii změn ze serveru.");
+            }
         } finally {
             setLoading(false);
         }
-    }, [page, rowsPerPage, searchQuery, moduleFilter]); // Závislosti
+    }, [page, rowsPerPage, searchQuery, moduleFilter, showNotification]);
 
-    // Debounce pro vyhledávání (počká 500ms)
     useEffect(() => {
         const timeoutId = setTimeout(() => {
             void fetchLogs();
@@ -101,7 +110,6 @@ const AuditLogsPage: React.FC = () => {
         setPage(0);
     };
 
-    // Resety stránky při hledání
     const handleSearchChange = (event: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
         setSearchQuery(event.target.value);
         setPage(0);
@@ -125,7 +133,6 @@ const AuditLogsPage: React.FC = () => {
 
     return (
         <Box sx={styles.container}>
-            {/* ZÁHLAVÍ */}
             <Paper elevation={0} sx={styles.headerCard}>
                 <Box sx={styles.headerLeft}>
                     <IconButton onClick={() => navigate(-1)} sx={styles.backButton}>
@@ -143,10 +150,7 @@ const AuditLogsPage: React.FC = () => {
                 <HistoryIcon sx={styles.headerIcon} />
             </Paper>
 
-            {/* OBSAH */}
             <Paper elevation={0} sx={styles.mainCard}>
-
-                {/* OVLÁDACÍ PRVKY */}
                 <Box sx={styles.controlsContainer}>
                     <TextField
                         placeholder="Hledat (uživatel, akce, detail)..."
@@ -155,14 +159,21 @@ const AuditLogsPage: React.FC = () => {
                         sx={styles.searchInput}
                         value={searchQuery}
                         onChange={handleSearchChange}
-                        InputProps={{ startAdornment: (<InputAdornment position="start"><SearchIcon color="action" fontSize="small" /></InputAdornment>) }}
+                        slotProps={{
+                            input: {
+                                startAdornment: (
+                                    <InputAdornment position="start">
+                                        <SearchIcon color="action" fontSize="small" />
+                                    </InputAdornment>
+                                )
+                            }
+                        }}
                     />
 
                     <Box sx={styles.filterContainer}>
                         <Typography variant="body2" color="textSecondary" sx={{ mr: 1, display: { xs: 'none', sm: 'block' } }}>
                             Modul:
                         </Typography>
-                        {/* Vygenerování tlačítek podle mapování */}
                         {filterOptions.map(option => (
                             <Chip
                                 key={option}
@@ -177,7 +188,6 @@ const AuditLogsPage: React.FC = () => {
                     </Box>
                 </Box>
 
-                {/* TABULKA */}
                 <TableContainer sx={styles.tableContainer}>
                     {loading && (
                         <Box sx={styles.loadingOverlay}>

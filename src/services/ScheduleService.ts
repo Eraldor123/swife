@@ -1,7 +1,6 @@
-import axios from 'axios';
+// Importujeme NÁŠ bezpečný klient, nikoliv čistý axios!
+import apiClient from '../api/axiosConfig';
 import type { WeeklyScheduleResponse, PlannerUser } from '../pages/ShiftPlanner/types/ShiftPlannerTypes.ts';
-
-const API_URL = 'http://localhost:8080/api/v1/schedule';
 
 export interface AutoPlanRequest {
     fairnessWeight: number;
@@ -12,71 +11,58 @@ export interface AutoPlanRequest {
     categoryId?: number;
 }
 
-const getAuthHeader = () => {
-    return {
-        withCredentials: true
-    };
-};
-
 export const ScheduleService = {
     getWeeklySchedule: async (startDate: string, endDate: string): Promise<WeeklyScheduleResponse> => {
-        const response = await axios.get(`${API_URL}/week-view`, {
-            params: { startDate, endDate },
-            ...getAuthHeader()
+        // apiClient už obsahuje baseURL (http://localhost:8080/api/v1) i hlavičky
+        const response = await apiClient.get('/schedule/week-view', {
+            params: { startDate, endDate }
         });
         return response.data;
     },
 
     getAvailableUsers: async (startDate: string, endDate: string): Promise<PlannerUser[]> => {
-        const response = await axios.get(`${API_URL}/available-users`, {
-            // PŘIDÁNO: size: 100 zajistí, že nám backend pošle dostatek uživatelů pro sidebar (výchozí je jen 20)
-            params: { startDate, endDate, size: 100 },
-            ...getAuthHeader()
+        const response = await apiClient.get('/schedule/available-users', {
+            params: { startDate, endDate, size: 100 }
         });
-
-        // OPRAVA: Zpracování Spring Page objektu (vrátíme pouze pole 'content')
         return response.data.content || response.data;
     },
 
     generateShifts: async (startDate: string, endDate: string, templateId: number): Promise<void> => {
-        await axios.post(`http://localhost:8080/api/v1/shift-generation/from-template`, {
+        await apiClient.post('/shift-generation/from-template', {
             startDate, endDate, templateId
-        }, getAuthHeader());
+        });
     },
 
     copyWeek: async (sourceWeekStart: string, targetWeekStart: string): Promise<void> => {
-        await axios.post(`http://localhost:8080/api/v1/shift-generation/copy-week`, {
+        await apiClient.post('/shift-generation/copy-week', {
             sourceWeekStart, targetWeekStart
-        }, getAuthHeader());
+        });
     },
 
     clearWeek: async (startDate: string, endDate: string): Promise<void> => {
-        await axios.delete(`http://localhost:8080/api/v1/shift-generation/clear-week`, {
-            params: { startDate, endDate },
-            ...getAuthHeader()
+        await apiClient.delete('/shift-generation/clear-week', {
+            params: { startDate, endDate }
         });
     },
 
     assignUserToShift: async (shiftId: string, userId: string): Promise<void> => {
-        await axios.post(`http://localhost:8080/api/v1/shift-assignments`, null, {
-            params: { shiftId, userId },
-            ...getAuthHeader()
+        await apiClient.post('/shift-assignments', null, {
+            params: { shiftId, userId }
         });
     },
 
     removeUserFromShift: async (shiftId: string, userId: string): Promise<void> => {
-        await axios.delete(`http://localhost:8080/api/v1/shift-assignments`, {
-            params: { shiftId, userId },
-            ...getAuthHeader()
+        await apiClient.delete('/shift-assignments', {
+            params: { shiftId, userId }
         });
     },
 
     updateShift: async (shiftId: string, data: { startTime: string; endTime: string; requiredCapacity: number; description?: string }): Promise<void> => {
-        await axios.put(`http://localhost:8080/api/v1/shifts/${shiftId}`, data, getAuthHeader());
+        await apiClient.put(`/shifts/${shiftId}`, data);
     },
 
     splitShift: async (shiftId: string): Promise<void> => {
-        await axios.post(`http://localhost:8080/api/v1/shifts/${shiftId}/split`, {}, getAuthHeader());
+        await apiClient.post(`/shifts/${shiftId}/split`);
     },
 
     generateCustomShifts: async (data: {
@@ -91,14 +77,14 @@ export const ScheduleService = {
         hasOdpo?: boolean;
         description?: string;
     }): Promise<void> => {
-        await axios.post(`http://localhost:8080/api/v1/shift-generation/custom`, data, getAuthHeader());
+        await apiClient.post('/shift-generation/custom', data);
     },
 
     deleteShift: async (shiftId: string): Promise<void> => {
-        await axios.delete(`http://localhost:8080/api/v1/shifts/${shiftId}`, getAuthHeader());
+        await apiClient.delete(`/shifts/${shiftId}`);
     },
 
     runAutoPlan: async (config: AutoPlanRequest): Promise<void> => {
-        await axios.post(`${API_URL}/auto-plan`, config, getAuthHeader());
+        await apiClient.post('/schedule/auto-plan', config);
     }
 };

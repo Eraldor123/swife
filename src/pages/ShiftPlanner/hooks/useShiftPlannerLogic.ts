@@ -1,18 +1,21 @@
-// src/pages/ShiftPlanner/hooks/useShiftPlannerLogic.ts
-
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { ScheduleService } from '../../../services/ScheduleService'; // Uprav cestu podle reálného umístění!
 import { useAuth } from '../../../context/AuthContext';            // Uprav cestu podle reálného umístění!
 
-// Importujeme naše nové, lokální typy
-import type {
-    WeeklyScheduleResponse, PlannerUser, HierarchyData, ScheduleShift
-} from '../types/ShiftPlannerTypes';
+// Technické importy pro bezpečnost a notifikace
+import apiClient from '../../../api/axiosConfig';                  // Uprav cestu podle reálného umístění!
+import { useNotification } from '../../../context/NotificationContext'; // Uprav cestu podle reálného umístění!
+import { isAxiosError } from 'axios';
 
-// Tyto typy pro modály budeme muset importovat z jejich souborů (až je přesuneš)
+// Importujeme lokální typy
+import type { WeeklyScheduleResponse, PlannerUser, HierarchyData, ScheduleShift } from '../types/ShiftPlannerTypes';
 import type { GenerateFormValues } from '../modals/GenerateShiftsModal';
 import type { CopyFormValues } from '../modals/CopyWeekModal';
 import type { AutoPlanConfig } from '../modals/AutoPlanModal';
+
+interface BackendError {
+    message?: string;
+}
 
 const formatDateLocal = (d: Date) => {
     const year = d.getFullYear();
@@ -43,6 +46,7 @@ const addWeeks = (dateStr: string, weeks: number) => {
 
 export const useShiftPlannerLogic = () => {
     const { userRoles, userId: loggedInUserId } = useAuth();
+    const { showNotification } = useNotification();
 
     // --- 1. STAVY (STATE) ---
     const [viewMode, setViewMode] = useState<'week' | 'day'>('week');
@@ -59,7 +63,6 @@ export const useShiftPlannerLogic = () => {
     const [selectedShiftForDetail, setSelectedShiftForDetail] = useState<ScheduleShift | null>(null);
     const [selectedDate, setSelectedDate] = useState<string>(currentWeekStart);
 
-    // Stavy Modálních oken
     const [isGenerateModalOpen, setIsGenerateModalOpen] = useState(false);
     const [isCopyModalOpen, setIsCopyModalOpen] = useState(false);
     const [isClearModalOpen, setIsClearModalOpen] = useState(false);
@@ -101,30 +104,28 @@ export const useShiftPlannerLogic = () => {
     const loadData = useCallback(async () => {
         setIsLoading(true);
         try {
+            // Nahrazeno natvrdo zapsané URL voláním přes apiClient
             const [scheduleRes, usersRes, hierarchyRes] = await Promise.all([
                 ScheduleService.getWeeklySchedule(currentWeekStart, endDate),
                 ScheduleService.getAvailableUsers(currentWeekStart, endDate),
-                fetch('http://localhost:8080/api/v1/position-settings/hierarchy', { credentials: 'include' }).then(res => res.json())
+                apiClient.get('/position-settings/hierarchy').then(res => res.data)
             ]);
+
             setScheduleData(scheduleRes);
 
-            // ----------------------------------------------------------------------
-            // OPRAVA TYPŮ: Ochrana proti přísnému TS a ESLintu
-            // ----------------------------------------------------------------------
             const usersData = usersRes as unknown as { content?: PlannerUser[] } | PlannerUser[];
             const extractedUsers = Array.isArray(usersData) ? usersData : (usersData?.content || []);
-
-            // Type guard "u is PlannerUser" vyřeší ESLint any error
             const validUsers = extractedUsers.filter((u): u is PlannerUser => u !== null && u !== undefined);
 
             setAvailableUsers(validUsers);
             setHierarchy(hierarchyRes);
-        } catch (error) {
-            console.error("Chyba při načítání Směnáře:", error);
+        } catch (error: unknown) {
+            const msg = isAxiosError(error) ? (error.response?.data as BackendError)?.message : 'Chyba při načítání dat';
+            showNotification(msg || "Nepodařilo se načíst data pro Směnář.", "error");
         } finally {
             setIsLoading(false);
         }
-    }, [currentWeekStart, endDate]);
+    }, [currentWeekStart, endDate, showNotification]);
 
     useEffect(() => {
         void loadData();
@@ -161,11 +162,12 @@ export const useShiftPlannerLogic = () => {
                     });
                 }
             }
+            showNotification("Směny byly úspěšně vygenerovány.", "success");
             setIsGenerateModalOpen(false);
             await loadData();
-        } catch (error) {
-            console.error("Chyba generování:", error);
-            alert("Nepodařilo se vygenerovat směny.");
+        } catch (error: unknown) {
+            const msg = isAxiosError(error) ? (error.response?.data as BackendError)?.message : 'Chyba generování';
+            showNotification(msg || "Nepodařilo se vygenerovat směny.", "error");
         }
     };
 
@@ -173,11 +175,12 @@ export const useShiftPlannerLogic = () => {
         if (!isManagerial) return;
         try {
             await ScheduleService.copyWeek(data.sourceWeekStart, data.targetWeekStart);
+            showNotification("Týden byl úspěšně zkopírován.", "success");
             setIsCopyModalOpen(false);
             setCurrentWeekStart(data.targetWeekStart);
-        } catch (error) {
-            console.error("Chyba při kopírování:", error);
-            alert("Nepodařilo se zkopírovat týden.");
+        } catch (error: unknown) {
+            const msg = isAxiosError(error) ? (error.response?.data as BackendError)?.message : 'Chyba kopírování';
+            showNotification(msg || "Nepodařilo se zkopírovat týden.", "error");
         }
     };
 
@@ -185,11 +188,12 @@ export const useShiftPlannerLogic = () => {
         if (!isManagerial) return;
         try {
             await ScheduleService.clearWeek(currentWeekStart, endDate);
+            showNotification("Týden byl úspěšně vyčištěn.", "success");
             setIsClearModalOpen(false);
             await loadData();
-        } catch (error) {
-            console.error("Chyba při mazání týdne:", error);
-            alert("Nepodařilo se vyčistit týden.");
+        } catch (error: unknown) {
+            const msg = isAxiosError(error) ? (error.response?.data as BackendError)?.message : 'Chyba mazání';
+            showNotification(msg || "Nepodařilo se vyčistit týden.", "error");
         }
     };
 
@@ -201,10 +205,12 @@ export const useShiftPlannerLogic = () => {
                 fairnessWeight: config.fairnessWeight, trainingWeight: config.trainingWeight, targetDate: config.targetDate,
                 startDate: currentWeekStart, endDate: endDate, categoryId: selectedCategory === 'all' ? undefined : selectedCategory
             });
+            showNotification("Automatické plánování proběhlo úspěšně.", "success");
             await loadData();
             setIsAutoPlanModalOpen(false);
-        } catch (error) {
-            console.error("Chyba algoritmu:", error);
+        } catch (error: unknown) {
+            const msg = isAxiosError(error) ? (error.response?.data as BackendError)?.message : 'Chyba algoritmu';
+            showNotification(msg || "Automatické plánování selhalo.", "error");
         } finally {
             setIsLoading(false);
         }
@@ -214,10 +220,11 @@ export const useShiftPlannerLogic = () => {
         if (!isManagerial || !selectedUserId) return;
         try {
             await ScheduleService.assignUserToShift(shiftId, selectedUserId);
+            showNotification("Uživatel byl úspěšně přiřazen.", "success");
             await loadData();
         } catch (error: unknown) {
-            const err = error as { response?: { data?: { message?: string } } };
-            alert(err.response?.data?.message || "Nepodařilo se přiřadit uživatele.");
+            const msg = isAxiosError(error) ? (error.response?.data as BackendError)?.message : 'Přiřazení selhalo';
+            showNotification(msg || "Nepodařilo se přiřadit uživatele.", "error");
         }
     };
 
@@ -225,11 +232,12 @@ export const useShiftPlannerLogic = () => {
         if (!isManagerial) return;
         try {
             await ScheduleService.removeUserFromShift(shiftId, userId);
+            showNotification("Uživatel byl odebrán ze směny.", "success");
             await loadData();
             setSelectedShiftForDetail(prev => prev ? { ...prev, assignedUsers: prev.assignedUsers.filter(u => u.userId !== userId) } : null);
-        } catch (error) {
-            console.error("Chyba při odebírání uživatele:", error);
-            alert("Nepodařilo se odebrat uživatele.");
+        } catch (error: unknown) {
+            const msg = isAxiosError(error) ? (error.response?.data as BackendError)?.message : 'Odebrání selhalo';
+            showNotification(msg || "Nepodařilo se odebrat uživatele.", "error");
         }
     };
 
@@ -237,11 +245,12 @@ export const useShiftPlannerLogic = () => {
         if (!isManagerial) return;
         try {
             await ScheduleService.updateShift(shiftId, { startTime, endTime, requiredCapacity: capacity, description });
+            showNotification("Směna byla aktualizována.", "success");
             await loadData();
             setSelectedShiftForDetail(null);
-        } catch (error) {
-            console.error("Chyba při aktualizaci směny:", error);
-            alert("Nepodařilo se uložit změny směny.");
+        } catch (error: unknown) {
+            const msg = isAxiosError(error) ? (error.response?.data as BackendError)?.message : 'Aktualizace selhala';
+            showNotification(msg || "Nepodařilo se uložit změny směny.", "error");
         }
     };
 
@@ -249,28 +258,30 @@ export const useShiftPlannerLogic = () => {
         if (!isManagerial) return;
         try {
             await ScheduleService.splitShift(shiftId);
+            showNotification("Směna byla úspěšně rozdělena.", "success");
             await loadData();
             setSelectedShiftForDetail(null);
-        } catch (error) {
-            console.error("Chyba při rozdělování směny:", error);
-            alert("Nepodařilo se rozdělit směnu.");
+        } catch (error: unknown) {
+            const msg = isAxiosError(error) ? (error.response?.data as BackendError)?.message : 'Rozdělení selhalo';
+            showNotification(msg || "Nepodařilo se rozdělit směnu.", "error");
         }
     };
 
     const handleDeleteShift = async (shiftId: string) => {
         if (!isManagerial) return;
-        if (!window.confirm("Opravdu chcete tuto směnu smazat?")) return;
+        if (!window.confirm("Opravdu chcete tuto směnu smazat?")) return; // window.confirm je zde v pořádku
         try {
             await ScheduleService.deleteShift(shiftId);
+            showNotification("Směna byla smazána.", "success");
             await loadData();
             setSelectedShiftForDetail(null);
         } catch (error: unknown) {
-            const err = error as { response?: { data?: { message?: string } } };
-            alert(err.response?.data?.message || "Nepodařilo se smazat směnu.");
+            const msg = isAxiosError(error) ? (error.response?.data as BackendError)?.message : 'Smazání selhalo';
+            showNotification(msg || "Nepodařilo se smazat směnu.", "error");
         }
     };
 
-    // --- RETURN OBJECT (Rozhraní pro UI) ---
+    // --- RETURN OBJECT ---
     return {
         state: {
             viewMode, selectedCategory, currentWeekStart, endDate, scheduleData, availableUsers,

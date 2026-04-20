@@ -1,5 +1,3 @@
-// src/pages/ShiftPlanner/ShiftPlannerPage.tsx
-
 import React from 'react';
 import {
     Box, Typography, CircularProgress, Button,
@@ -23,10 +21,10 @@ import GenerateShiftsModal from '../modals/GenerateShiftsModal';
 import ShiftDetailModal from '../modals/ShiftDetailModal';
 import AutoPlanModal from '../modals/AutoPlanModal';
 
-export const ShiftPlannerPage: React.FC = () => {
+const ShiftPlannerPage: React.FC = () => {
     const navigate = useNavigate();
 
-    // Logika zůstává absolutně nedotčena!
+    // Logika zůstává oddělena v hooku
     const { state, actions } = useShiftPlannerLogic();
 
     const {
@@ -41,7 +39,7 @@ export const ShiftPlannerPage: React.FC = () => {
         setIsGenerateModalOpen, setIsCopyModalOpen, setIsClearModalOpen, setIsAutoPlanModalOpen,
         handleGenerateConfirm, handleCopyConfirm, handleClearConfirm, handleAutoPlanConfirm,
         handleAssignUser, handleRemoveUser, handleUpdateShift, handleSplitShift, handleDeleteShift,
-        handlePrevWeek, handleNextWeek, setSelectedDate // <-- PŘIDÁNO: Vytažení funkce z logiky
+        handlePrevWeek, handleNextWeek, setSelectedDate
     } = actions;
 
     const handleCategoryChange = (event: SelectChangeEvent<number | 'all'>) => {
@@ -58,7 +56,7 @@ export const ShiftPlannerPage: React.FC = () => {
 
     return (
         <Box sx={plannerStyles.mainWrapper}>
-            {/* SIDEBAR: Levý panel - logiky ani vnitřní struktury se nedotýkáme */}
+            {/* SIDEBAR: Levý panel */}
             {isManagerial && (
                 <PlannerSidebar
                     users={availableUsers}
@@ -76,10 +74,10 @@ export const ShiftPlannerPage: React.FC = () => {
             {/* HLAVNÍ OBSAH: Hlavička + Mřížka */}
             <Box sx={plannerStyles.contentColumn}>
 
-                {/* 1. HORNÍ OVLÁDACÍ LIŠTA (Top Bar) s novým rozložením */}
+                {/* 1. HORNÍ OVLÁDACÍ LIŠTA */}
                 <Paper elevation={0} sx={plannerStyles.headerPaper}>
 
-                    {/* Skupina A: Kulatá šipka zpět + Dvouřádkový Nadpis */}
+                    {/* Skupina A: Zpět + Nadpis */}
                     <Box sx={plannerStyles.headerTitleGroup}>
                         <IconButton onClick={() => navigate('/dashboard/shifts')} sx={plannerStyles.backButton}>
                             <ArrowBack sx={{ color: '#475569', fontSize: 24 }} />
@@ -89,7 +87,7 @@ export const ShiftPlannerPage: React.FC = () => {
                         </Box>
                     </Box>
 
-                    {/* Skupina B: AKČNÍ LIŠTA (Tlačítka) */}
+                    {/* Skupina B: AKČNÍ LIŠTA */}
                     {isManagerial && (
                         <Box sx={{ display: 'flex', gap: 1 }}>
                             <Button onClick={() => setIsGenerateModalOpen(true)} variant="contained" sx={plannerStyles.buttons.primary}>Generovat</Button>
@@ -98,11 +96,11 @@ export const ShiftPlannerPage: React.FC = () => {
                         </Box>
                     )}
 
-                    {/* Skupina C: PŘEPÍNAČ ZOBRAZENÍ (Týden/Den) */}
+                    {/* Skupina C: PŘEPÍNAČ ZOBRAZENÍ */}
                     <ToggleButtonGroup
                         value={viewMode}
                         exclusive
-                        onChange={(_, val) => val && setViewMode(val)}
+                        onChange={(_, val: 'week' | 'day') => val && setViewMode(val)}
                         sx={plannerStyles.toggleGroup}
                     >
                         <ToggleButton value="week">Týden</ToggleButton>
@@ -120,7 +118,6 @@ export const ShiftPlannerPage: React.FC = () => {
                         </Select>
                     </FormControl>
 
-                    {/* Volný prostor (odstrčí datumovku doprava) */}
                     <Box sx={{ flexGrow: 1 }} />
 
                     {/* Skupina E: VÝBĚR DATA */}
@@ -136,7 +133,7 @@ export const ShiftPlannerPage: React.FC = () => {
                     </Box>
                 </Paper>
 
-                {/* 2. MŘÍŽKA SMĚN (Nová bílá karta) */}
+                {/* 2. MŘÍŽKA SMĚN */}
                 <Box sx={plannerStyles.gridWrapper}>
                     {viewMode === 'week' ? (
                         <PlannerGrid
@@ -158,19 +155,20 @@ export const ShiftPlannerPage: React.FC = () => {
                             onAssignUser={handleAssignUser}
                             onRemoveUser={handleRemoveUser}
                             onShiftClick={(shift) => setSelectedShiftForDetail(shift)}
-                            onDateChange={setSelectedDate} // <-- PŘIDÁNO: Napojení přepínání dnů v Gridu
+                            onDateChange={setSelectedDate}
                         />
                     )}
                 </Box>
 
-                {/* MODÁLNÍ OKNA (Původní logika) */}
+                {/* MODÁLNÍ OKNA */}
                 {isManagerial && (
                     <>
                         <GenerateShiftsModal open={isGenerateModalOpen} onClose={() => setIsGenerateModalOpen(false)} onConfirm={handleGenerateConfirm} hierarchy={activeHierarchy} currentWeekStart={currentWeekStart} currentWeekEnd={endDate} />
                         <CopyWeekModal open={isCopyModalOpen} onClose={() => setIsCopyModalOpen(false)} onConfirm={handleCopyConfirm} currentWeekStart={currentWeekStart} />
                         <AutoPlanModal open={isAutoPlanModalOpen} onClose={() => setIsAutoPlanModalOpen(false)} onConfirm={handleAutoPlanConfirm} viewMode={viewMode} selectedDate={selectedDate} />
 
-                        <Dialog open={isClearModalOpen} onClose={() => setIsClearModalOpen(false)} maxWidth="xs" fullWidth PaperProps={{ sx: { borderRadius: '24px', p: 1 } }}>
+                        {/* MUI v6 OPRAVA: PaperProps nahrazeno slotProps */}
+                        <Dialog open={isClearModalOpen} onClose={() => setIsClearModalOpen(false)} maxWidth="xs" fullWidth slotProps={{ paper: { sx: { borderRadius: '24px', p: 1 } } }}>
                             <DialogTitle sx={{ fontWeight: 'bold', color: '#ef4444' }}>Vyčištění týdne</DialogTitle>
                             <DialogContent>
                                 <Typography>Opravdu chcete smazat <strong>VŠECHNY</strong> směny v tomto týdnu ({currentWeekStart} — {endDate})?</Typography>
@@ -178,7 +176,7 @@ export const ShiftPlannerPage: React.FC = () => {
                             </DialogContent>
                             <DialogActions sx={{ p: 2 }}>
                                 <Button onClick={() => setIsClearModalOpen(false)} sx={{ color: '#64748b', textTransform: 'none', fontWeight: 'bold' }}>Zrušit</Button>
-                                <Button onClick={handleClearConfirm} sx={plannerStyles.buttons.danger}>Ano, vyčistit</Button>
+                                <Button onClick={() => void handleClearConfirm()} sx={plannerStyles.buttons.danger}>Ano, vyčistit</Button>
                             </DialogActions>
                         </Dialog>
                     </>

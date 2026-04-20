@@ -3,7 +3,7 @@ import { Box, Typography, Button, Paper } from '@mui/material';
 import MenuCard from '../components/MenuCard';
 import { useAuth } from '../context/AuthContext';
 import LogoutIcon from '@mui/icons-material/Logout';
-import AccountCircleIcon from '@mui/icons-material/AccountCircle'; // Ikona uživatele do hlavičky
+import AccountCircleIcon from '@mui/icons-material/AccountCircle';
 import PersonAddIcon from '@mui/icons-material/PersonAdd';
 import HistoryIcon from '@mui/icons-material/History';
 import { styles } from '../theme/DashboardMenu.styles';
@@ -13,13 +13,18 @@ const AdminUsersDashboard: React.FC = () => {
 
     const isAdminOrManagement = useMemo(() => {
         if (!userRoles) return false;
+        // Normalizujeme role pro jistotu
         const cleanUserRoles = userRoles.map(r => r.replace('ROLE_', '').toUpperCase());
         return cleanUserRoles.some(role => ['ADMIN', 'MANAGEMENT'].includes(role));
     }, [userRoles]);
 
+    // OPRAVA: logout je nyní async, tak ho tak i voláme
+    const handleLogout = () => {
+        void logout();
+    };
+
     return (
         <Box sx={styles.container}>
-            {/* NOVÁ TMAVÁ HLAVIČKA */}
             <Paper elevation={0} sx={styles.headerCard}>
                 <Box sx={styles.headerLeft}>
                     <AccountCircleIcon sx={styles.headerIcon} />
@@ -30,7 +35,7 @@ const AdminUsersDashboard: React.FC = () => {
 
                 <Button
                     variant="text"
-                    onClick={logout}
+                    onClick={handleLogout} // Voláme naši upravenou funkci
                     startIcon={<LogoutIcon />}
                     sx={styles.logoutButton}
                 >

@@ -1,31 +1,33 @@
-import React, { useState } from 'react';
+import React, { useState, type SyntheticEvent } from 'react';
 import { Box, Typography, Button, InputBase, CircularProgress } from '@mui/material';
 import AlternateEmailIcon from '@mui/icons-material/AlternateEmail';
 import { Link } from 'react-router-dom';
-import axios from 'axios';
 import { authStyles } from '../theme/auth.styles';
+
+// Technické importy
+import apiClient from '../api/axiosConfig';
 
 const RequestReset: React.FC = () => {
     const [email, setEmail] = useState<string>('');
     const [message, setMessage] = useState<{ text: string; isError: boolean } | null>(null);
     const [loading, setLoading] = useState<boolean>(false);
 
-    const handleSubmit = async (e: React.FormEvent) => {
+    // OPRAVA: Použití SyntheticEvent pro odstranění deprecace FormEvent
+    const handleSubmit = async (e: SyntheticEvent) => {
         e.preventDefault();
         setLoading(true);
         setMessage(null);
 
         try {
-            // Backend nyní vrací 200 OK, i když mail neexistuje
-            await axios.post('http://localhost:8080/api/v1/auth/password-reset/request', { email });
+            // NÁHRADA: Použití apiClient (URL je nyní relativní k baseURL)
+            await apiClient.post('/auth/password-reset/request', { email });
 
-            // Vždy ukážeme tuto zprávu
             setMessage({
                 text: 'Pokud je e-mail v našem systému zaregistrován, odeslali jsme na něj instrukce k obnově hesla.',
                 isError: false
             });
-        } catch (error) {
-            // I při chybě sítě nebo serveru nebudeme útočníkovi napovídat
+        } catch (error: unknown) {
+            // I při chybě sítě zachováme tvou bezpečnostní logiku
             console.error("Technická chyba při požadavku na reset:", error);
             setMessage({
                 text: 'Pokud je e-mail v našem systému zaregistrován, odeslali jsme na něj instrukce k obnově hesla.',
@@ -33,19 +35,17 @@ const RequestReset: React.FC = () => {
             });
         } finally {
             setLoading(false);
-            setEmail(''); // Vymažeme pole pro profesionální dojem
+            setEmail('');
         }
     };
 
     return (
         <Box sx={authStyles.pageContainer}>
 
-            {/* 1. TMAVÁ SKLENĚNÁ HLAVIČKA S LOGEM */}
             <Box sx={authStyles.header}>
                 <Typography sx={authStyles.logoText}>CompanyApp</Typography>
             </Box>
 
-            {/* 2. VYCENTROVANÁ HLAVNÍ SKLENĚNÁ KARTA */}
             <Box sx={authStyles.mainContent}>
                 <Box component="form" onSubmit={handleSubmit} sx={authStyles.formBox}>
                     <Typography variant="h5" sx={authStyles.formTitle}>
@@ -91,7 +91,6 @@ const RequestReset: React.FC = () => {
                 </Box>
             </Box>
 
-            {/* 3. TMAVÁ SKLENĚNÁ PATIČKA */}
             <Box sx={authStyles.footer}>
                 <Typography sx={authStyles.footerText}>
                     © {new Date().getFullYear()} Made by: Štěpán Ralenovský

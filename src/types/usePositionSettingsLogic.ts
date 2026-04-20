@@ -1,7 +1,14 @@
-// usePositionSettingsLogic.ts
 import { useState, useCallback } from 'react';
 import type { HierarchyCategory, HierarchyStation, HierarchyResponse, SeasonMode } from './PositionsTypes';
 import { INITIAL_HOURS_FORM, INITIAL_PAUSE_FORM } from './PositionsTypes';
+
+// Technické importy
+import apiClient from '../api/axiosConfig';
+import { isAxiosError } from 'axios';
+
+interface BackendError {
+    message?: string;
+}
 
 export const usePositionSettingsLogic = () => {
     const [loading, setLoading] = useState<boolean>(true);
@@ -14,16 +21,13 @@ export const usePositionSettingsLogic = () => {
 
     const fetchHierarchy = useCallback(async () => {
         try {
-            const response = await fetch('http://localhost:8080/api/v1/position-settings/hierarchy', {
-                headers: { 'Cache-Control': 'no-cache', 'Accept': 'application/json' },
-                credentials: 'include'
-            });
+            // Místo fetch a ručních hlaviček použijeme čistý apiClient
+            const response = await apiClient.get('/position-settings/hierarchy');
 
-            if (response.ok) {
-                const data = (await response.json()) as HierarchyResponse | HierarchyCategory[];
+            if (response.status === 200) {
+                const data = response.data as HierarchyResponse | HierarchyCategory[];
                 const rawCategories = Array.isArray(data) ? data : (data.categories ?? []);
 
-                // OPRAVA: Odstraněno 'any', používáme přesné typy
                 const sanitizedCategories: HierarchyCategory[] = rawCategories.map((cat: HierarchyCategory) => ({
                     ...cat,
                     stations: (cat.stations ?? []).map((stat: HierarchyStation) => ({
@@ -31,35 +35,43 @@ export const usePositionSettingsLogic = () => {
                         templates: stat.templates ?? []
                     }))
                 }));
+
                 setCategories(sanitizedCategories);
                 setErrorMessage(null);
-            } else if (response.status === 403) {
-                setErrorMessage("Nemáte dostatečná oprávnění.");
-            } else {
-                // OPRAVA: Místo lokálního throw rovnou nastavíme zprávu
-                setErrorMessage("Nepodařilo se načíst hierarchii.");
             }
-        } catch (error) {
-            // OPRAVA: Proměnná 'error' je nyní využita
+        } catch (error: unknown) {
             console.error("Chyba při stahování hierarchie:", error);
-            setErrorMessage("Chyba spojení se serverem.");
+
+            if (isAxiosError(error)) {
+                if (error.response?.status === 403) {
+                    setErrorMessage("Nemáte dostatečná oprávnění.");
+                } else {
+                    const data = error.response?.data as BackendError;
+                    setErrorMessage(data?.message || "Nepodařilo se načíst hierarchii.");
+                }
+            } else {
+                setErrorMessage("Chyba spojení se serverem.");
+            }
         }
     }, []);
 
     const fetchOperatingHoursData = useCallback(async () => {
         try {
-            const headers = { 'Cache-Control': 'no-cache', 'Accept': 'application/json' };
+            // Promise.all s apiClientem je mnohem čistší, axios si credentials a hlavičky řeší sám
             const [stdRes, pauseRes, seasonRes] = await Promise.all([
-                fetch('http://localhost:8080/api/v1/operating-hours/standard', { headers, credentials: 'include' }),
-                fetch('http://localhost:8080/api/v1/operating-hours/pause-rule', { headers, credentials: 'include' }),
-                fetch('http://localhost:8080/api/v1/operating-hours/seasons', { headers, credentials: 'include' })
+                apiClient.get('/operating-hours/standard'),
+                apiClient.get('/operating-hours/pause-rule'),
+                apiClient.get('/operating-hours/seasons')
             ]);
 
-            if (stdRes.ok) setStandardHours(await stdRes.json());
-            if (pauseRes.ok) setPauseRule(await pauseRes.json());
-            if (seasonRes.ok) setSeasons(await seasonRes.json());
-        } catch (error) {
+            // U Axiosu jsou data rovnou naparsovaná v response.data
+            if (stdRes.status === 200) setStandardHours(stdRes.data);
+            if (pauseRes.status === 200) setPauseRule(pauseRes.data);
+            if (seasonRes.status === 200) setSeasons(seasonRes.data);
+
+        } catch (error: unknown) {
             console.error("Chyba načítání dat provozu:", error);
+            // Zde nenastavujeme errorMessage plošně, aby nespadla celá stránka, pokud se nenačte jen pauza
         }
     }, []);
 
@@ -79,7 +91,6 @@ export const usePositionSettingsLogic = () => {
         const todayStr = today.toISOString().split('T')[0];
         const activeSeason = seasons.find(s => s.startDate <= todayStr && s.endDate >= todayStr);
 
-        // OPRAVA: Odstraněna redundantní inicializace = ""
         let dStr: string;
         let oStr: string;
 
@@ -96,6 +107,7 @@ export const usePositionSettingsLogic = () => {
                 oStr = `${standardHours.weekOdpoStart.substring(0, 5)} - ${standardHours.weekOdpoEnd.substring(0, 5)}`;
             }
         }
+
         if (hasDopo && hasOdpo) return `${dStr} a ${oStr}`;
         return hasDopo ? dStr : (hasOdpo ? oStr : "");
     };

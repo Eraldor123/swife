@@ -3,7 +3,7 @@ import { Box, Typography, Button, Paper } from '@mui/material';
 import MenuCard from '../components/MenuCard';
 import { useAuth } from '../context/AuthContext';
 import LogoutIcon from '@mui/icons-material/Logout';
-import GridViewIcon from '@mui/icons-material/GridView'; // Ikona mřížky do hlavičky
+import GridViewIcon from '@mui/icons-material/GridView';
 import CalendarMonthIcon from '@mui/icons-material/CalendarMonth';
 import EventIcon from '@mui/icons-material/Event';
 import SettingsIcon from '@mui/icons-material/Settings';
@@ -13,10 +13,18 @@ import { styles } from '../theme/DashboardMenu.styles';
 const AdminShiftsDashboard: React.FC = () => {
     const { userRoles, logout } = useAuth();
 
-    const isManagerial = useMemo(() =>
-        userRoles.some((role: string) =>
+    // Úprava pro striktní TypeScript - kontrola existence rolí
+    const isManagerial = useMemo(() => {
+        if (!userRoles) return false;
+        return userRoles.some((role: string) =>
             ['ADMIN', 'PLANNER', 'MANAGEMENT'].includes(role.replace('ROLE_', '').toUpperCase())
-        ), [userRoles]);
+        );
+    }, [userRoles]);
+
+    // OPRAVA: logout je nyní async, tak ho tak i voláme
+    const handleLogout = () => {
+        void logout();
+    };
 
     return (
         <Box sx={styles.container}>
@@ -31,7 +39,7 @@ const AdminShiftsDashboard: React.FC = () => {
 
                 <Button
                     variant="text"
-                    onClick={logout}
+                    onClick={handleLogout} // Použití opravené funkce
                     startIcon={<LogoutIcon />}
                     sx={styles.logoutButton}
                 >

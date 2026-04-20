@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
     Box, Typography, Paper, Button, Dialog, DialogTitle, DialogContent,
-    DialogActions, FormControlLabel, Snackbar, Alert,
+    DialogActions, FormControlLabel,
     Switch, IconButton, CircularProgress
 } from '@mui/material';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
@@ -12,7 +12,12 @@ import { AdapterDayjs } from '@mui/x-date-pickers/AdapterDayjs';
 import type { PickersDayProps } from '@mui/x-date-pickers';
 import dayjs, { Dayjs } from 'dayjs';
 import 'dayjs/locale/cs';
+
+// Technické importy
+import apiClient from '../api/axiosConfig';
+import { useNotification } from '../context/NotificationContext';
 import { useAuth } from '../context/AuthContext';
+import { isAxiosError } from 'axios';
 
 import { AvailabilityStyledDay } from '../components/AvailabilityStyledDay';
 import type { BackendAvailabilityDto, UiAvailabilityDayDto } from '../components/AvailabilityStyledDay';
@@ -25,12 +30,14 @@ import {
 
 dayjs.locale('cs');
 
+interface BackendError {
+    message?: string;
+}
+
 const AvailabilityCalendarPage: React.FC = () => {
     const { userId, isLoading: authLoading } = useAuth();
     const navigate = useNavigate();
-
-    const [status, setStatus] = useState<{ type: 'success' | 'error' | undefined; message: string }>({ type: undefined, message: '' });
-    const [snackbarOpen, setSnackbarOpen] = useState(false);
+    const { showNotification } = useNotification();
 
     const [selectedDate, setSelectedDate] = useState<Dayjs | null>(dayjs());
     const [currentMonth, setCurrentMonth] = useState<Dayjs>(dayjs());
@@ -44,25 +51,27 @@ const AvailabilityCalendarPage: React.FC = () => {
 
     const [loading, setLoading] = useState(true);
 
+    // 1. NAČÍTÁNÍ DAT PŘES API CLIENT
     const fetchAvailabilities = useCallback(async (month: Dayjs) => {
         if (!userId) return;
         setLoading(true);
         try {
             const monthStr = month.format('YYYY-MM');
-            const response = await fetch(`http://localhost:8080/api/v1/availabilities/monthly/${userId}/${monthStr}?t=${new Date().getTime()}`, {
-                method: 'GET',
-                credentials: 'include'
+            // Používáme apiClient.get a parametry předáváme v objektu params
+            const response = await apiClient.get(`/availabilities/monthly/${userId}/${monthStr}`, {
+                params: { t: new Date().getTime() }
             });
-            if (response.ok) {
-                const data = await response.json();
-                setSavedAvailabilities(data);
+
+            if (response.status === 200) {
+                setSavedAvailabilities(response.data);
             }
         } catch (error) {
-            console.error("❌ Chyba sítě:", error);
+            console.error("❌ Chyba při načítání dostupnosti:", error);
+            showNotification('Nepodařilo se načíst data kalendáře.', 'error');
         } finally {
             setLoading(false);
         }
-    }, [userId]);
+    }, [userId, showNotification]);
 
     useEffect(() => {
         if (authLoading) return;
@@ -105,6 +114,7 @@ const AvailabilityCalendarPage: React.FC = () => {
         setIsDialogOpen(false);
     };
 
+    // 2. ODESÍLÁNÍ DAT PŘES API CLIENT
     const handleSubmitToBackend = async () => {
         if (!userId) return;
         setLoading(true);
@@ -133,26 +143,27 @@ const AvailabilityCalendarPage: React.FC = () => {
 
             const payloadDays = Array.from(finalDaysMap.values());
 
-            const response = await fetch('http://localhost:8080/api/v1/availabilities/monthly', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                credentials: 'include',
-                body: JSON.stringify({ userId: userId, month: monthStr, availableDays: payloadDays })
+            const response = await apiClient.post('/availabilities/monthly', {
+                userId: userId,
+                month: monthStr,
+                availableDays: payloadDays
             });
 
-            if (response.ok) {
-                setStatus({ type: 'success', message: 'Změny byly úspěšně uloženy!' });
+            if (response.status === 200 || response.status === 201) {
+                showNotification('Změny byly úspěšně uloženy!', 'success');
                 setUiChanges([]);
                 await fetchAvailabilities(currentMonth);
-            } else {
-                setStatus({ type: 'error', message: 'Chyba při ukládání na server.' });
             }
-        } catch (error) {
+        } catch (error: unknown) {
             console.error(error);
-            setStatus({ type: 'error', message: 'Chyba spojení se serverem.' });
+            if (isAxiosError(error)) {
+                const errorData = error.response?.data as BackendError;
+                showNotification(errorData?.message || 'Chyba při ukládání na server.', 'error');
+            } else {
+                showNotification('Chyba spojení se serverem.', 'error');
+            }
         } finally {
             setLoading(false);
-            setSnackbarOpen(true);
         }
     };
 
@@ -277,9 +288,7 @@ const AvailabilityCalendarPage: React.FC = () => {
                     </DialogActions>
                 </Dialog>
 
-                <Snackbar open={snackbarOpen} autoHideDuration={3000} onClose={() => setSnackbarOpen(false)}>
-                    <Alert severity={status.type} variant="filled" sx={{ borderRadius: '8px' }}>{status.message}</Alert>
-                </Snackbar>
+                {/* STARÝ SNACKBAR BYL ODSTRANĚN, POUŽÍVÁME GLOBÁLNÍ NOTIFIKACE */}
             </Box>
         </LocalizationProvider>
     );
