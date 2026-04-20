@@ -1,3 +1,5 @@
+// src/pages/ShiftPlanner/modals/ShiftDetailModal.tsx
+
 import React, { useState } from 'react';
 import {
     Dialog, DialogTitle, DialogContent, DialogActions,
@@ -8,7 +10,10 @@ import DeleteIcon from '@mui/icons-material/Delete';
 import EditIcon from '@mui/icons-material/Edit';
 import SaveIcon from '@mui/icons-material/Save';
 import CloseIcon from '@mui/icons-material/Close';
-import type { ScheduleShift } from '../../../types/schedule';
+import CallSplitIcon from '@mui/icons-material/CallSplit';
+
+import { plannerStyles } from '../styles/ShiftPlannerStyles';
+import type { ScheduleShift } from '../types/ShiftPlannerTypes.ts';
 
 interface Props {
     open: boolean;
@@ -23,7 +28,7 @@ interface Props {
 const ShiftDetailModal: React.FC<Props> = ({ open, onClose, shift, onRemoveUser, onUpdateShift, onSplitShift, onDeleteShift }) => {
     const [isEditing, setIsEditing] = useState(false);
 
-    // Initial state setup. No need for useEffect due to key={shift.id} in parent.
+    // Initial state setup. No need for useEffect due to key={shift?.id} v rodiči.
     const [startTime, setStartTime] = useState(shift?.startTime.substring(11, 16) || '');
     const [endTime, setEndTime] = useState(shift?.endTime.substring(11, 16) || '');
     const [capacity, setCapacity] = useState<number>(shift?.requiredCapacity || 1);
@@ -33,7 +38,11 @@ const ShiftDetailModal: React.FC<Props> = ({ open, onClose, shift, onRemoveUser,
 
     const startHour = parseInt(shift.startTime.substring(11, 13), 10);
     const endHour = parseInt(shift.endTime.substring(11, 13), 10);
-    const isFullDay = startHour < 12 && endHour >= 15;
+
+    // OPRAVA: Tlačítko se ukáže, pokud směna trvá déle než 2 hodiny
+    const isFullDay = (endHour - startHour) > 2;
+
+    const isFull = shift.assignedUsers.length >= capacity;
 
     const handleSave = () => {
         const startDatePart = shift.startTime.substring(0, 11);
@@ -46,88 +55,107 @@ const ShiftDetailModal: React.FC<Props> = ({ open, onClose, shift, onRemoveUser,
         setIsEditing(false);
     };
 
+    const handleClose = () => {
+        setIsEditing(false);
+        onClose();
+    };
+
     return (
         <Dialog
             open={open}
-            onClose={onClose}
+            onClose={handleClose}
             maxWidth="xs"
             fullWidth
-            slotProps={{ paper: { sx: { borderRadius: 4 } } }}
+            PaperProps={{ sx: plannerStyles.modalPaper }}
         >
-            <DialogTitle sx={{ bgcolor: '#f8f9fa', pb: 2 }}>
-                <Typography component="div" variant="h6" sx={{ fontWeight: 'bold', color: '#3e3535' }}>
-                    {isEditing ? 'Upravit parametry směny' : 'Detail směny'}
-                </Typography>
-                {!isEditing && (
-                    <Typography variant="body2" color="text.secondary">
-                        Čas: {startTime} — {endTime}
-                    </Typography>
-                )}
+            <DialogTitle sx={plannerStyles.modalTitle}>
+                <Box>
+                    {isEditing ? 'Upravit parametry' : 'Detail směny'}
+                    {!isEditing && (
+                        <Typography variant="body2" sx={{ color: '#64748b', fontWeight: 500, mt: 0.5 }}>
+                            Čas: {shift.startTime.substring(11, 16)} — {shift.endTime.substring(11, 16)}
+                        </Typography>
+                    )}
+                </Box>
+                <IconButton onClick={handleClose} sx={plannerStyles.closeButton} size="small">
+                    <CloseIcon />
+                </IconButton>
             </DialogTitle>
 
             <DialogContent sx={{ p: 0 }}>
                 {isEditing ? (
-                    <Box sx={{ p: 3, display: 'flex', flexDirection: 'column', gap: 2.5 }}>
+                    <Box sx={{ p: 2, display: 'flex', flexDirection: 'column', gap: 2.5 }}>
                         <Box sx={{ display: 'flex', gap: 2 }}>
+                            <Box sx={{ flex: 1 }}>
+                                <Typography sx={plannerStyles.modalLabel}>Začátek</Typography>
+                                <TextField
+                                    type="time"
+                                    value={startTime}
+                                    onChange={(e) => setStartTime(e.target.value)}
+                                    sx={plannerStyles.dropdownControl}
+                                    fullWidth
+                                />
+                            </Box>
+                            <Box sx={{ flex: 1 }}>
+                                <Typography sx={plannerStyles.modalLabel}>Konec</Typography>
+                                <TextField
+                                    type="time"
+                                    value={endTime}
+                                    onChange={(e) => setEndTime(e.target.value)}
+                                    sx={plannerStyles.dropdownControl}
+                                    fullWidth
+                                />
+                            </Box>
+                        </Box>
+
+                        <Box>
+                            <Typography sx={plannerStyles.modalLabel}>Potřebná kapacita</Typography>
                             <TextField
-                                label="Začátek"
-                                type="time"
-                                value={startTime}
-                                onChange={(e) => setStartTime(e.target.value)}
-                                slotProps={{ inputLabel: { shrink: true } }}
+                                type="number"
+                                value={capacity}
+                                onChange={(e) => setCapacity(parseInt(e.target.value) || 1)}
+                                inputProps={{ min: 1 }}
+                                sx={plannerStyles.dropdownControl}
                                 fullWidth
-                                size="small"
-                            />
-                            <TextField
-                                label="Konec"
-                                type="time"
-                                value={endTime}
-                                onChange={(e) => setEndTime(e.target.value)}
-                                slotProps={{ inputLabel: { shrink: true } }}
-                                fullWidth
-                                size="small"
                             />
                         </Box>
-                        <TextField
-                            label="Potřebná kapacita (počet lidí)"
-                            type="number"
-                            value={capacity}
-                            onChange={(e) => setCapacity(parseInt(e.target.value) || 1)}
-                            slotProps={{ htmlInput: { min: 1 } }}
-                            fullWidth
-                            size="small"
-                        />
-                        <TextField
-                            label="Popisek směny"
-                            value={description}
-                            onChange={(e) => setDescription(e.target.value)}
-                            fullWidth
-                            size="small"
-                            placeholder="Např. Školní výlet"
-                        />
+
+                        <Box>
+                            <Typography sx={plannerStyles.modalLabel}>Popisek směny</Typography>
+                            <TextField
+                                value={description}
+                                onChange={(e) => setDescription(e.target.value)}
+                                sx={plannerStyles.dropdownControl}
+                                fullWidth
+                                placeholder="Např. Školní výlet"
+                            />
+                        </Box>
                     </Box>
                 ) : (
                     <>
                         {shift.description && (
-                            <Box sx={{ px: 3, py: 1.5, bgcolor: '#fff3e0', borderBottom: '1px solid #ffe0b2' }}>
-                                <Typography variant="body2" sx={{ color: '#e65100', fontWeight: 'bold' }}>
+                            <Box sx={{ px: 2, py: 1.5, mx: 2, mb: 2, bgcolor: '#fffbeb', borderRadius: '8px', border: '1px solid #fef3c7' }}>
+                                <Typography variant="body2" sx={{ color: '#d97706', fontWeight: 600 }}>
                                     📝 {shift.description}
                                 </Typography>
                             </Box>
                         )}
 
-                        <Box sx={{ px: 3, py: 2, bgcolor: '#e3f2fd', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                            <Typography variant="body2" sx={{ fontWeight: 'bold', color: '#1976d2' }}>
+                        {/* Nový zaoblený blok pro obsazenost (nahrazuje původní full-width pruh) */}
+                        <Box sx={{ bgcolor: '#f8fafc', p: 2, borderRadius: '8px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2, mx: 2 }}>
+                            <Typography sx={{ fontWeight: 600, color: '#475569' }}>
                                 Obsazenost
                             </Typography>
-                            <Typography variant="body2" sx={{ fontWeight: 'bold', color: '#1976d2' }}>
+                            <Typography sx={{ fontWeight: 700, color: isFull ? '#10b981' : '#f59e0b', fontSize: '1.1rem' }}>
                                 {shift.assignedUsers.length} / {capacity}
                             </Typography>
                         </Box>
-                        <Divider />
+
+                        <Divider sx={{ mx: 2, mb: 1, borderColor: '#f1f5f9' }} />
+
                         <List sx={{ px: 1, minHeight: 100 }}>
                             {shift.assignedUsers.length === 0 ? (
-                                <Typography variant="body2" sx={{ textAlign: 'center', p: 4, color: '#aaa', fontStyle: 'italic' }}>
+                                <Typography variant="body2" sx={{ textAlign: 'center', p: 4, color: '#94a3b8', fontStyle: 'italic' }}>
                                     Na tuto směnu zatím není nikdo přiřazen.
                                 </Typography>
                             ) : (
@@ -135,20 +163,20 @@ const ShiftDetailModal: React.FC<Props> = ({ open, onClose, shift, onRemoveUser,
                                     <ListItem
                                         key={user.userId}
                                         secondaryAction={
-                                            <IconButton edge="end" color="error" onClick={() => onRemoveUser(shift.id, user.userId)}>
+                                            <IconButton edge="end" onClick={() => onRemoveUser(shift.id, user.userId)} sx={{ color: '#ef4444', '&:hover': { bgcolor: '#fef2f2' } }}>
                                                 <DeleteIcon fontSize="small" />
                                             </IconButton>
                                         }
-                                        sx={{ borderRadius: 2, mb: 0.5, '&:hover': { bgcolor: '#f5f5f5' } }}
+                                        sx={{ borderRadius: '8px', mb: 0.5, '&:hover': { bgcolor: '#f8fafc' } }}
                                     >
                                         <ListItemAvatar>
-                                            <Avatar sx={{ bgcolor: '#3e3535', width: 32, height: 32, fontSize: '0.85rem' }}>
-                                                {user.name.charAt(0)}
+                                            <Avatar sx={{ bgcolor: '#eff6ff', color: '#3b82f6', width: 36, height: 36, fontSize: '0.9rem', fontWeight: 700 }}>
+                                                {user.name.charAt(0).toUpperCase()}
                                             </Avatar>
                                         </ListItemAvatar>
                                         <ListItemText
                                             primary={
-                                                <Typography sx={{ fontWeight: 'bold', color: '#3e3535', fontSize: '0.9rem' }}>
+                                                <Typography sx={{ fontWeight: 600, color: '#1e293b', fontSize: '0.95rem' }}>
                                                     {user.name}
                                                 </Typography>
                                             }
@@ -161,24 +189,21 @@ const ShiftDetailModal: React.FC<Props> = ({ open, onClose, shift, onRemoveUser,
                 )}
             </DialogContent>
 
-            <DialogActions sx={{ p: 2, bgcolor: '#f8f9fa', justifyContent: 'space-between' }}>
+            <DialogActions sx={{ p: 2, pt: 3, gap: 1, justifyContent: isEditing ? 'flex-end' : 'space-between' }}>
                 {isEditing ? (
                     <>
                         <Button
-                            startIcon={<CloseIcon />}
                             onClick={() => setIsEditing(false)}
-                            color="inherit"
-                            sx={{ textTransform: 'none' }}
+                            sx={plannerStyles.modalButtons.secondary}
                         >
                             Zrušit
                         </Button>
                         <Box sx={{ display: 'flex', gap: 1 }}>
                             {isFullDay && (
                                 <Button
+                                    startIcon={<CallSplitIcon />}
                                     onClick={() => onSplitShift(shift.id)}
-                                    variant="outlined"
-                                    color="warning"
-                                    sx={{ borderRadius: '10px', textTransform: 'none' }}
+                                    sx={plannerStyles.modalButtons.special} // Plně oranžové tlačítko
                                 >
                                     Rozdělit
                                 </Button>
@@ -186,9 +211,7 @@ const ShiftDetailModal: React.FC<Props> = ({ open, onClose, shift, onRemoveUser,
                             <Button
                                 startIcon={<SaveIcon />}
                                 onClick={handleSave}
-                                variant="contained"
-                                color="primary"
-                                sx={{ borderRadius: '10px', textTransform: 'none', px: 3 }}
+                                sx={plannerStyles.modalButtons.primary} // Plně modré
                             >
                                 Uložit
                             </Button>
@@ -197,26 +220,25 @@ const ShiftDetailModal: React.FC<Props> = ({ open, onClose, shift, onRemoveUser,
                 ) : (
                     <>
                         <Box sx={{ display: 'flex', gap: 0.5 }}>
+                            {/* Tlačítka jako "Text action" podle zadání */}
                             <Button
                                 startIcon={<DeleteIcon />}
                                 onClick={() => onDeleteShift(shift.id)}
-                                color="error"
-                                sx={{ textTransform: 'none', fontWeight: 'bold' }}
+                                sx={{ ...plannerStyles.modalButtons.textAction, color: '#ef4444' }}
                             >
                                 Smazat
                             </Button>
                             <Button
                                 startIcon={<EditIcon />}
                                 onClick={() => setIsEditing(true)}
-                                sx={{ color: '#1976d2', textTransform: 'none', fontWeight: 'bold' }}
+                                sx={{ ...plannerStyles.modalButtons.textAction, color: '#3b82f6' }}
                             >
                                 Upravit
                             </Button>
                         </Box>
                         <Button
-                            onClick={onClose}
-                            variant="contained"
-                            sx={{ bgcolor: '#3e3535', borderRadius: '10px', textTransform: 'none', '&:hover': { bgcolor: '#000' } }}
+                            onClick={handleClose}
+                            sx={plannerStyles.modalButtons.secondary} // Světle šedé zavírací tlačítko
                         >
                             Zavřít
                         </Button>

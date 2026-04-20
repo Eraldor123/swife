@@ -1,4 +1,4 @@
-// src/types/schedule.ts
+// src/types/ShiftPlannerTypes.ts
 
 /**
  * Rozhraní pro otevírací dobu areálu v konkrétní den

@@ -1,10 +1,14 @@
+// src/pages/ShiftPlanner/modals/AutoPlanModal.tsx
+
 import React, { useState } from 'react';
 import {
     Dialog, DialogTitle, DialogContent, DialogActions,
-    Button, Typography, Box, Slider, IconButton, Divider
+    Button, Typography, Box, Slider, IconButton
 } from '@mui/material';
-import AutoAwesomeIcon from '@mui/icons-material/AutoAwesome';
 import CloseIcon from '@mui/icons-material/Close';
+
+// Import sjednocených stylů
+import { plannerStyles } from '../styles/ShiftPlannerStyles';
 
 interface Props {
     open: boolean;
@@ -21,7 +25,7 @@ export interface AutoPlanConfig {
 }
 
 const AutoPlanModal: React.FC<Props> = ({ open, onClose, onConfirm, viewMode, selectedDate }) => {
-    // Výchozí hodnoty: 80% spravedlnost (chceme odměňovat dříče), 10% zaučování (občas někoho šoupnout na nové)
+    // Výchozí hodnoty zůstávají: 80% spravedlnost, 10% zaučování
     const [fairness, setFairness] = useState<number>(80);
     const [training, setTraining] = useState<number>(10);
 
@@ -33,89 +37,116 @@ const AutoPlanModal: React.FC<Props> = ({ open, onClose, onConfirm, viewMode, se
         });
     };
 
-    // Pomocné texty, aby admin věděl, co to procento dělá
+    // Pomocné texty pro admina (odstraněny emoji)
     const getFairnessText = (val: number) => {
         if (val < 30) return "Hlavně zaplnit kapacity, na spravedlnost se nehledí.";
-        if (val < 70) return "Vyvážený přístup (snaží se to trochu dělit).";
-        return "Přísná spravedlnost! Přednost mají ti, co nabídli hodně času a zatím nemají směny.";
+        if (val < 70) return "Vyvážený přístup (snaha o rovnoměrné dělení).";
+        return "Přísná spravedlnost! Přednost mají ti s největší rezervou času.";
     };
 
     const getTrainingText = (val: number) => {
-        if (val === 0) return "0 % – Striktní provoz (Pouze lidé s kvalifikací).";
-        if (val < 40) return "Běžný provoz (Sem tam někdo na zaučení, když chybí lidi).";
+        if (val === 0) return "Striktní provoz (Pouze lidé s kvalifikací).";
+        if (val < 40) return "Běžný provoz (Zaučení jen při nedostatku lidí).";
         if (val < 80) return "Zvýšené zaučování nových lidí na stanovištích.";
-        return "100 % – ŠKOLICÍ DEN! Lidé půjdou primárně tam, kde to ještě neumí.";
+        return "Školicí nastavení! Lidé půjdou primárně tam, kde se zaučují.";
     };
 
     return (
-        <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth slotProps={{ paper: { sx: { borderRadius: 4 } } }}>
-            <DialogTitle sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', bgcolor: '#f8f9fa', pb: 2 }}>
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                    <AutoAwesomeIcon sx={{ color: '#ff9800' }} />
-                    <Typography variant="h6" sx={{ fontWeight: 'bold', color: '#3e3535' }}>
-                        Automatické plánování směn
-                    </Typography>
-                </Box>
-                <IconButton onClick={onClose} size="small"><CloseIcon /></IconButton>
+        <Dialog
+            open={open}
+            onClose={onClose}
+            maxWidth="sm"
+            fullWidth
+            PaperProps={{ sx: plannerStyles.modalPaper }}
+        >
+            <DialogTitle sx={plannerStyles.modalTitle}>
+                Automatické plánování
+                <IconButton
+                    onClick={onClose}
+                    size="small"
+                    sx={{ ml: 'auto', color: '#94a3b8' }}
+                >
+                    <CloseIcon />
+                </IconButton>
             </DialogTitle>
 
-            <DialogContent sx={{ p: 3, display: 'flex', flexDirection: 'column', gap: 4, mt: 1 }}>
-                <Box sx={{ bgcolor: '#e3f2fd', p: 1.5, borderRadius: 2 }}>
-                    <Typography variant="body2" sx={{ color: '#1976d2', fontWeight: 'bold' }}>
-                        Rozsah plánování: {viewMode === 'day' ? `Pouze pro vybraný den (${new Date(selectedDate).toLocaleDateString('cs-CZ')})` : 'Celý aktuální týden'}
+            <DialogContent sx={{ p: 3 }}>
+                {/* Informační box o rozsahu */}
+                <Box sx={plannerStyles.infoBox}>
+                    <Typography variant="body2" sx={{ fontWeight: 700 }}>
+                        Rozsah plánování:
+                        {viewMode === 'day'
+                            ? ` Pouze pro vybraný den (${new Date(selectedDate).toLocaleDateString('cs-CZ')})`
+                            : ' Celý aktuální týden'}
+                    </Typography>
+                    <Typography variant="caption" sx={{ display: 'block', mt: 0.5, opacity: 0.8 }}>
+                        Algoritmus analyzuje dostupnost všech zaměstnanců a obsadí volné sloty podle nastavených priorit.
                     </Typography>
                 </Box>
 
                 {/* 1. SLIDER - SPRAVEDLNOST */}
-                <Box>
-                    <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
-                        <Typography sx={{ fontWeight: 'bold', color: '#3e3535' }}>Férovost rozdělení (Odměna pro dříče)</Typography>
-                        <Typography sx={{ fontWeight: 'bold', color: '#1976d2' }}>{fairness} %</Typography>
+                <Box sx={{ mb: 4 }}>
+                    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', mb: 1 }}>
+                        <Typography sx={plannerStyles.modalLabel}>Férovost rozdělení</Typography>
+                        <Typography sx={{ fontWeight: 800, color: '#2563eb', fontSize: '1.1rem' }}>
+                            {fairness} %
+                        </Typography>
                     </Box>
                     <Slider
                         value={fairness}
                         onChange={(_, val) => setFairness(val as number)}
                         step={10}
-                        marks
                         min={0}
                         max={100}
-                        sx={{ color: '#1976d2' }}
+                        sx={{
+                            color: '#2563eb',
+                            height: 6,
+                            '& .MuiSlider-thumb': { width: 16, height: 16 }
+                        }}
                     />
-                    <Typography variant="caption" sx={{ color: '#666', fontStyle: 'italic', display: 'block', mt: 0.5 }}>
-                        💡 {getFairnessText(fairness)}
+                    <Typography variant="caption" sx={{ color: '#64748b', fontStyle: 'italic', display: 'block', mt: 1 }}>
+                        Informace: {getFairnessText(fairness)}
                     </Typography>
                 </Box>
 
-                <Divider />
-
                 {/* 2. SLIDER - ZAUČOVÁNÍ */}
-                <Box>
-                    <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
-                        <Typography sx={{ fontWeight: 'bold', color: '#3e3535' }}>Míra zaučování</Typography>
-                        <Typography sx={{ fontWeight: 'bold', color: '#ff9800' }}>{training} %</Typography>
+                <Box sx={{ mb: 2 }}>
+                    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', mb: 1 }}>
+                        <Typography sx={plannerStyles.modalLabel}>Míra zaučování</Typography>
+                        <Typography sx={{ fontWeight: 800, color: '#f59e0b', fontSize: '1.1rem' }}>
+                            {training} %
+                        </Typography>
                     </Box>
                     <Slider
                         value={training}
                         onChange={(_, val) => setTraining(val as number)}
                         step={10}
-                        marks
                         min={0}
                         max={100}
-                        sx={{ color: '#ff9800' }}
+                        sx={{
+                            color: '#f59e0b',
+                            height: 6,
+                            '& .MuiSlider-thumb': { width: 16, height: 16 }
+                        }}
                     />
-                    <Typography variant="caption" sx={{ color: '#666', fontStyle: 'italic', display: 'block', mt: 0.5 }}>
-                        🎓 {getTrainingText(training)}
+                    <Typography variant="caption" sx={{ color: '#64748b', fontStyle: 'italic', display: 'block', mt: 1 }}>
+                        Status: {getTrainingText(training)}
                     </Typography>
                 </Box>
             </DialogContent>
 
-            <DialogActions sx={{ p: 2, bgcolor: '#f8f9fa' }}>
-                <Button onClick={onClose} color="inherit" sx={{ textTransform: 'none' }}>Zrušit</Button>
+            <DialogActions sx={{ p: 3, gap: 1 }}>
+                <Button
+                    onClick={onClose}
+                    sx={plannerStyles.modalButtons.secondary}
+                >
+                    Zrušit
+                </Button>
                 <Button
                     onClick={handleConfirm}
                     variant="contained"
-                    sx={{ bgcolor: '#ff9800', color: 'white', borderRadius: '10px', textTransform: 'none', fontWeight: 'bold', px: 3, '&:hover': { bgcolor: '#e68a00' } }}
-                    startIcon={<AutoAwesomeIcon />}
+                    sx={plannerStyles.modalButtons.special}
+
                 >
                     Spustit algoritmus
                 </Button>

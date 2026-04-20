@@ -11,7 +11,7 @@ import PositionsSettingsPage from './pages/PositionsSettingsPage';
 import AvailabilityCalendarPage from './pages/AvailabilityCalendarPage';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import EmployeeQualificationsPage from './pages/EmployeeQualificationsPage';
-import ShiftPlanner from './pages/ShiftPlanner/ShiftPlanner';
+import ShiftPlanner from './pages/ShiftPlanner/components/ShiftPlannerPage.tsx';
 import AuditLogsPage from './pages/AuditLogsPage'; // PŘIDÁNO: Import pro Audit logy
 import RequestReset from "./pages/RequestReset.tsx";
 import ResetPassword from "./pages/ResetPassword.tsx";
@@ -83,7 +83,7 @@ const App: React.FC = () => {
                         {/* SEKCE SMĚNY */}
                         <Route path="shifts" element={<AdminShiftsDashboard />} />
 
-                        {/* Směnář vidí všichni, ale jeho vnitřek se mění podle role (již jsme upravili v ShiftPlanner.tsx) */}
+                        {/* Směnář vidí všichni, ale jeho vnitřek se mění podle role (již jsme upravili v ShiftPlannerPage.tsx) */}
                         <Route path="shifts/generator" element={<ShiftPlanner />} />
 
                         {/* Kvalifikace - Zabezpečeno pro vedení a plánovače */}

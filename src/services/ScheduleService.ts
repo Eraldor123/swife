@@ -1,5 +1,5 @@
 import axios from 'axios';
-import type { WeeklyScheduleResponse, PlannerUser } from '../types/schedule';
+import type { WeeklyScheduleResponse, PlannerUser } from '../pages/ShiftPlanner/types/ShiftPlannerTypes.ts';
 
 const API_URL = 'http://localhost:8080/api/v1/schedule';
 

@@ -1,16 +1,21 @@
-// src/components/shifts/Planner/PlannerSidebar.tsx
+// src/pages/ShiftPlanner/components/PlannerSidebar.tsx
 
 import React, { useState, useMemo } from 'react';
 import {
     Box, Typography, Paper, Avatar, List, ListItem, ListItemAvatar,
-    ListItemText, ListItemButton, Tabs, Tab, Button
+    ListItemText, ListItemButton, Tabs, Tab, Button, TextField
 } from '@mui/material';
+import { Search as SearchIcon } from '@mui/icons-material';
+
+// Import nového prémiového designu
+import { plannerStyles } from '../styles/ShiftPlannerStyles';
+
 import type {
     PlannerUser,
     WeeklyScheduleResponse,
     HierarchyCategory,
     ScheduleShift
-} from '../../types/schedule';
+} from '../types/ShiftPlannerTypes';
 
 interface SidebarProps {
     users: PlannerUser[];
@@ -28,12 +33,14 @@ const PlannerSidebar: React.FC<SidebarProps> = ({
                                                     users, selectedUserId, onSelectUser, shifts, viewMode, selectedDate, onAutoPlan
                                                 }) => {
     const [tabIndex, setTabIndex] = useState(0);
+    const [search, setSearch] = useState('');
 
+    // =========================================================================
+    // LOGIKA - ZŮSTÁVÁ NAPROSTO NEDOTČENA
+    // =========================================================================
     const processedUsers = useMemo(() => {
-        // 1. BEZPEČNOSTNÍ POJISTKA: Zkontrolujeme, že users je pole
         if (!Array.isArray(users)) return [];
 
-        // 2. BEZPEČNOSTNÍ POJISTKA: Vyhodíme všechny null/undefined záznamy
         const validUsers = users.filter(user => user !== null && user !== undefined);
 
         return validUsers.map(user => {
@@ -41,14 +48,13 @@ const PlannerSidebar: React.FC<SidebarProps> = ({
             let workedSlots = 0;
 
             if (viewMode === 'day') {
-                // 3. BEZPEČNOSTNÍ POJISTKA: Přidán otazník u user?.weekAvailability
                 const avail = user?.weekAvailability?.[selectedDate];
                 if (avail === 'CELÝ DEN') offeredSlots = 2;
                 else if (avail === 'DOP' || avail === 'ODP') offeredSlots = 1;
 
-                const shiftsToday = shifts.filter(s =>
+                const shiftsToday = (shifts || []).filter(s =>
                     s.shiftDate === selectedDate &&
-                    s.assignedUsers.some(au => au.userId === user.userId)
+                    (s.assignedUsers || []).some(au => au.userId === user.userId)
                 );
 
                 let hasMorning = false;
@@ -73,8 +79,8 @@ const PlannerSidebar: React.FC<SidebarProps> = ({
 
                 const userShiftsByDate = new Map<string, ScheduleShift[]>();
 
-                shifts.forEach(shift => {
-                    if (shift.assignedUsers.some(au => au.userId === user.userId)) {
+                (shifts || []).forEach(shift => {
+                    if ((shift.assignedUsers || []).some(au => au.userId === user.userId)) {
                         const arr = userShiftsByDate.get(shift.shiftDate) || [];
                         arr.push(shift);
                         userShiftsByDate.set(shift.shiftDate, arr);
@@ -96,43 +102,74 @@ const PlannerSidebar: React.FC<SidebarProps> = ({
                 });
             }
 
-            const isFullyBooked = offeredSlots === 0 || workedSlots >= offeredSlots;
+            const isFullyBooked = offeredSlots > 0 && workedSlots >= offeredSlots;
             return { ...user, isFullyBooked };
         });
     }, [users, shifts, viewMode, selectedDate]);
 
+    // Filtrace uživatelů podle záložky a vyhledávání
     const availableUsersList = processedUsers.filter(u => !u.isFullyBooked);
     const bookedUsersList = processedUsers.filter(u => u.isFullyBooked);
-    const displayedUsers = tabIndex === 0 ? availableUsersList : bookedUsersList;
+    let displayedUsers = tabIndex === 0 ? availableUsersList : bookedUsersList;
 
+    if (search.trim() !== '') {
+        displayedUsers = displayedUsers.filter(u =>
+            (u.name || '').toLowerCase().includes(search.toLowerCase())
+        );
+    }
+
+    // =========================================================================
+    // VIZUÁL (JSX) - OPRAVENÝ FLEXBOX LAYOUT
+    // =========================================================================
     return (
-        <Paper elevation={2} sx={{ width: 280, display: 'flex', flexDirection: 'column', height: '100%', zIndex: 10 }}>
-            <Box sx={{ bgcolor: '#3e3535', color: 'white', pt: 2 }}>
-                <Typography variant="h6" sx={{ fontWeight: 'bold', px: 2, pb: 1 }}>Zaměstnanci</Typography>
+        <Paper elevation={0} sx={plannerStyles.sidebarPaper}>
 
-                <Tabs
-                    value={tabIndex}
-                    onChange={(_, newValue) => {
-                        setTabIndex(newValue);
-                        onSelectUser(null);
-                    }}
-                    variant="fullWidth"
-                    sx={{
-                        minHeight: 40,
-                        '& .MuiTab-root': { color: 'rgba(255,255,255,0.7)', minHeight: 40, textTransform: 'none', fontWeight: 'bold' },
-                        '& .Mui-selected': { color: '#fff !important' },
-                        '& .MuiTabs-indicator': { backgroundColor: '#4caf50' }
-                    }}
-                >
-                    <Tab label={`Dostupní (${availableUsersList.length})`} />
-                    <Tab label={`Obsazení (${bookedUsersList.length})`} sx={{ '&.Mui-selected': { color: '#ff9800 !important' } }} />
-                </Tabs>
+            {/* 1. HLAVIČKA PANELU */}
+            <Box sx={plannerStyles.sidebarHeader}>
+                <Typography>Zaměstnanci</Typography>
             </Box>
 
-            <List sx={{ flexGrow: 1, overflow: 'auto', p: 0, bgcolor: tabIndex === 1 ? '#fafafa' : 'white' }}>
+            {/* 2. ZÁLOŽKY */}
+            <Tabs
+                value={tabIndex}
+                onChange={(_, newValue) => {
+                    setTabIndex(newValue);
+                    onSelectUser(null);
+                }}
+                centered
+                sx={plannerStyles.sidebarTabs}
+            >
+                <Tab label={`Dostupní (${availableUsersList.length})`} />
+                <Tab label={`Obsazení (${bookedUsersList.length})`} />
+            </Tabs>
+
+            {/* VYHLEDÁVÁNÍ */}
+            <Box sx={{ px: 2, pb: 1, flexShrink: 0 }}>
+                <TextField
+                    fullWidth
+                    size="small"
+                    placeholder="Hledat..."
+                    value={search}
+                    onChange={(e) => setSearch(e.target.value)}
+                    InputProps={{
+                        startAdornment: <SearchIcon sx={{ color: '#94a3b8', mr: 1, fontSize: 20 }} />,
+                        sx: { borderRadius: '8px', bgcolor: '#f8fafc' }
+                    }}
+                />
+            </Box>
+
+            {/* 3. SEZNAM ZAMĚSTNANCŮ (Scrollovatelná část) */}
+            <List sx={{
+                flexGrow: 1,
+                overflowY: 'auto',
+                p: 1,
+                bgcolor: '#ffffff',
+                minHeight: 0 // Klíčové pro správné scrollování ve flexu
+            }}>
+
                 {displayedUsers.length === 0 && (
-                    <Typography variant="body2" sx={{ p: 3, textAlign: 'center', color: '#888', fontStyle: 'italic' }}>
-                        Žádní zaměstnanci v této kategorii.
+                    <Typography variant="body2" sx={{ p: 3, textAlign: 'center', color: '#94a3b8', fontStyle: 'italic' }}>
+                        {search ? 'Žádní zaměstnanci neodpovídají hledání.' : 'Žádní zaměstnanci v této kategorii.'}
                     </Typography>
                 )}
 
@@ -145,34 +182,39 @@ const PlannerSidebar: React.FC<SidebarProps> = ({
                                     selected={isSelected}
                                     onClick={() => onSelectUser(isSelected ? null : user.userId)}
                                     sx={{
-                                        borderBottom: '1px solid #eee',
-                                        '&.Mui-selected': { bgcolor: '#e3f2fd' },
-                                        '&.Mui-selected:hover': { bgcolor: '#bbdefb' },
+                                        borderRadius: '8px',
+                                        mb: 0.5,
+                                        '&.Mui-selected': { bgcolor: '#eff6ff' },
+                                        '&.Mui-selected:hover': { bgcolor: '#dbeafe' },
                                         opacity: tabIndex === 1 ? 0.7 : 1
                                     }}
                                 >
-                                    <ListItemAvatar>
-                                        <Avatar sx={{ bgcolor: isSelected ? '#1976d2' : (tabIndex === 1 ? '#e0e0e0' : '#bdbdbd') }}>
+                                    <ListItemAvatar sx={{ minWidth: 40 }}>
+                                        <Avatar sx={{
+                                            width: 32, height: 32, fontSize: '0.85rem',
+                                            bgcolor: isSelected ? '#1976d2' : (tabIndex === 1 ? '#f1f5f9' : '#e2e8f0'),
+                                            color: isSelected ? '#ffffff' : (tabIndex === 1 ? '#94a3b8' : '#64748b')
+                                        }}>
                                             {user.name ? user.name.charAt(0) : '?'}
                                         </Avatar>
                                     </ListItemAvatar>
                                     <ListItemText
-                                        primary={<Typography sx={{ fontWeight: isSelected ? 'bold' : 'normal', color: '#3e3535' }}>{user.name || 'Neznámý'}</Typography>}
+                                        primary={<Typography sx={{ fontSize: '0.9rem', fontWeight: isSelected ? 600 : 500, color: isSelected ? '#1e293b' : '#334155' }}>{user.name || 'Neznámý'}</Typography>}
                                     />
                                 </ListItemButton>
                             </ListItem>
 
                             {isSelected && (
-                                <Box sx={{ p: 2, bgcolor: '#f8f9fa', borderBottom: '1px solid #ddd' }}>
+                                <Box sx={{ p: 1.5, mx: 1, mb: 1, bgcolor: '#f8fafc', borderRadius: '8px', border: '1px solid #f1f5f9' }}>
                                     <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1, alignItems: 'center' }}>
-                                        <Typography variant="body2" color="text.secondary">Naplánováno v měsíci:</Typography>
-                                        <Typography variant="body2" sx={{ fontWeight: 'bold', bgcolor: '#3e3535', color: 'white', px: 1, py: 0.2, borderRadius: 1 }}>
+                                        <Typography variant="caption" color="#64748b">Naplánováno v měsíci:</Typography>
+                                        <Typography variant="caption" sx={{ fontWeight: 'bold', bgcolor: '#1976d2', color: 'white', px: 1, py: 0.2, borderRadius: '4px' }}>
                                             {user.plannedShiftsThisMonth || 0}
                                         </Typography>
                                     </Box>
                                     <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                        <Typography variant="body2" color="text.secondary">Splněno v měsíci:</Typography>
-                                        <Typography variant="body2" sx={{ fontWeight: 'bold', border: '1px solid #3e3535', px: 1, py: 0.2, borderRadius: 1 }}>
+                                        <Typography variant="caption" color="#64748b">Splněno v měsíci:</Typography>
+                                        <Typography variant="caption" sx={{ fontWeight: 'bold', border: '1px solid #cbd5e1', color: '#475569', px: 1, py: 0.2, borderRadius: '4px' }}>
                                             {user.completedShiftsThisMonth || 0}
                                         </Typography>
                                     </Box>
@@ -183,22 +225,14 @@ const PlannerSidebar: React.FC<SidebarProps> = ({
                 })}
             </List>
 
-            <Box sx={{ p: 2, borderTop: '1px solid #eee', bgcolor: '#fafafa', display: 'flex' }}>
+            {/* 4. PATIČKA (Vždy viditelná dospod) */}
+            <Box sx={plannerStyles.autoPlanButtonWrapper}>
                 <Button
                     variant="contained"
                     onClick={onAutoPlan}
-                    fullWidth
-                    sx={{
-                        bgcolor: '#ff9800',
-                        color: 'white',
-                        fontWeight: 'bold',
-                        textTransform: 'none',
-                        borderRadius: 2,
-                        py: 1.5,
-                        '&:hover': { bgcolor: '#e68a00' }
-                    }}
+                    sx={plannerStyles.autoPlanButton}
                 >
-                    ✨ Automaticky obsadit
+                    Automaticky obsadit
                 </Button>
             </Box>
         </Paper>
