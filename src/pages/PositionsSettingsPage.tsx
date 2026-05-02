@@ -41,6 +41,9 @@ const PositionsSettingsPage: React.FC = () => {
     const { showNotification } = useNotification();
     const [activeTab, setActiveTab] = useState(0);
 
+    // OCHRANA PROTI VÍCENÁSOBNÉMU ODESLÁNÍ
+    const [isSaving, setIsSaving] = useState(false);
+
     const {
         loading, errorMessage, categories, standardHours, pauseRule, seasons,
         loadAllData, fetchHierarchy, fetchOperatingHoursData, formatTimeForServer, getTodayOpeningHoursText
@@ -100,7 +103,8 @@ const PositionsSettingsPage: React.FC = () => {
     };
 
     const handleSaveCategory = async () => {
-        if (!catForm.name.trim()) return;
+        if (!catForm.name.trim() || isSaving) return;
+        setIsSaving(true);
         const url = catForm.id ? `/position-settings/categories/${catForm.id}` : `/position-settings/categories`;
         try {
             const payload = { name: catForm.name, hexColor: catForm.color, sortOrder: catForm.order, isActive: catForm.active };
@@ -110,11 +114,14 @@ const PositionsSettingsPage: React.FC = () => {
         } catch (error: unknown) {
             const msg = isAxiosError(error) ? (error.response?.data as BackendError)?.message : 'Chyba serveru';
             showNotification(msg || 'Chyba při ukládání kategorie', 'error');
+        } finally {
+            setIsSaving(false);
         }
     };
 
     const handleSaveStation = async () => {
-        if (!statForm.name.trim() || !selectedCatId) return;
+        if (!statForm.name.trim() || !selectedCatId || isSaving) return;
+        setIsSaving(true);
         const url = statForm.id ? `/position-settings/stations/${statForm.id}` : `/position-settings/stations`;
         try {
             const payload = { name: statForm.name, categoryId: selectedCatId, capacityLimit: statForm.capacityLimit, sortOrder: statForm.order, isActive: statForm.active, needsQualification: statForm.needsQualification, afternoonStartTime: statForm.useDefaultSplitTime ? null : formatTimeForServer(statForm.afternoonStartTime) };
@@ -124,11 +131,14 @@ const PositionsSettingsPage: React.FC = () => {
         } catch (error: unknown) {
             const msg = isAxiosError(error) ? (error.response?.data as BackendError)?.message : 'Chyba serveru';
             showNotification(msg || 'Chyba při ukládání stanoviště', 'error');
+        } finally {
+            setIsSaving(false);
         }
     };
 
     const handleSaveTemplate = async () => {
-        if (!tmplForm.name.trim() || !selectedStatId) return;
+        if (!tmplForm.name.trim() || !selectedStatId || isSaving) return;
+        setIsSaving(true);
         const url = tmplForm.id ? `/position-settings/templates/${tmplForm.id}` : `/position-settings/templates`;
         const payload: TemplatePayload = { name: tmplForm.name, stationId: selectedStatId, workersNeeded: tmplForm.workersNeeded, sortOrder: tmplForm.order, isActive: tmplForm.active, useOpeningHours: tmplForm.shiftType === 'split' ? tmplForm.useOpeningHours : false, hasDopo: tmplForm.shiftType === 'split' ? tmplForm.hasDopo : true, hasOdpo: tmplForm.shiftType === 'split' ? tmplForm.hasOdpo : false };
         if (tmplForm.shiftType === 'full') { payload.startTime = formatTimeForServer(tmplForm.fullStartTime); payload.endTime = formatTimeForServer(tmplForm.fullEndTime); }
@@ -143,11 +153,14 @@ const PositionsSettingsPage: React.FC = () => {
         } catch (error: unknown) {
             const msg = isAxiosError(error) ? (error.response?.data as BackendError)?.message : 'Chyba serveru';
             showNotification(msg || 'Chyba při ukládání šablony', 'error');
+        } finally {
+            setIsSaving(false);
         }
     };
 
     const executeDeleteOrDeactivate = async (action: 'deactivate' | 'hard_delete') => {
-        if (!deleteDialog.id) return;
+        if (!deleteDialog.id || isSaving) return;
+        setIsSaving(true);
         try {
             if (deleteDialog.type === 'season') {
                 const url = `/operating-hours/seasons/${deleteDialog.id}`;
@@ -173,6 +186,8 @@ const PositionsSettingsPage: React.FC = () => {
         } catch (error: unknown) {
             const msg = isAxiosError(error) ? (error.response?.data as BackendError)?.message : 'Chyba serveru';
             showNotification(msg || 'Nepodařilo se smazat položku', 'error');
+        } finally {
+            setIsSaving(false);
         }
     };
 
@@ -182,6 +197,8 @@ const PositionsSettingsPage: React.FC = () => {
 
     // OPRAVA 2: Odchytávání a zpracování chyb v nastavení časů
     const handleSaveHours = async () => {
+        if (isSaving) return;
+        setIsSaving(true);
         try {
             await apiClient.put('/operating-hours/standard', hoursForm);
             showNotification('Otevírací doba uložena', 'success');
@@ -191,10 +208,14 @@ const PositionsSettingsPage: React.FC = () => {
         catch (error: unknown) {
             const msg = isAxiosError(error) ? (error.response?.data as BackendError)?.message : 'Chyba serveru';
             showNotification(msg || 'Chyba při ukládání otevírací doby', 'error');
+        } finally {
+            setIsSaving(false);
         }
     };
 
     const handleSavePause = async () => {
+        if (isSaving) return;
+        setIsSaving(true);
         try {
             await apiClient.put('/operating-hours/pause-rule', { triggerHours: pauseForm.triggerHours, pauseMinutes: pauseForm.pauseMinutes });
             showNotification('Pravidla pauz uložena', 'success');
@@ -204,11 +225,14 @@ const PositionsSettingsPage: React.FC = () => {
         catch (error: unknown) {
             const msg = isAxiosError(error) ? (error.response?.data as BackendError)?.message : 'Chyba serveru';
             showNotification(msg || 'Chyba při ukládání pravidel pauz', 'error');
+        } finally {
+            setIsSaving(false);
         }
     };
 
     const handleSaveSeason = async () => {
-        if (!seasonForm.name.trim() || !seasonForm.startDate || !seasonForm.endDate) return;
+        if (!seasonForm.name.trim() || !seasonForm.startDate || !seasonForm.endDate || isSaving) return;
+        setIsSaving(true);
         const url = seasonForm.id ? `/operating-hours/seasons/${seasonForm.id}` : `/operating-hours/seasons`;
         try {
             if (seasonForm.id) await apiClient.put(url, seasonForm); else await apiClient.post(url, seasonForm);
@@ -219,6 +243,8 @@ const PositionsSettingsPage: React.FC = () => {
         catch (error: unknown) {
             const msg = isAxiosError(error) ? (error.response?.data as BackendError)?.message : 'Chyba serveru';
             showNotification(msg || 'Chyba při ukládání sezónního režimu', 'error');
+        } finally {
+            setIsSaving(false);
         }
     };
 
@@ -334,7 +360,15 @@ const PositionsSettingsPage: React.FC = () => {
                     <Typography>Opravdu si přejete smazat položku: <strong>{deleteDialog.name}</strong>?</Typography>
                     <TextField fullWidth size="small" label="Napište SMAZAT pro trvalý výmaz" sx={{ mt: 3, ...modernInputStyle }} value={deleteConfirmText} onChange={e => setDeleteConfirmText(e.target.value)} slotProps={{ htmlInput: { style: { textAlign: 'center', letterSpacing: '2px', fontWeight: 'bold' } } }} />
                 </DialogContent>
-                <DialogActions sx={dialogActionsStyle}><Button onClick={() => setDeleteDialog({ ...deleteDialog, open: false })} sx={ghostButtonStyle}>Zrušit</Button><Button color="error" variant="contained" disabled={deleteConfirmText !== 'SMAZAT'} onClick={() => void executeDeleteOrDeactivate('hard_delete')} sx={dangerButtonStyle}>Trvale smazat</Button><Button color="success" variant="contained" onClick={() => void executeDeleteOrDeactivate('deactivate')} sx={neutralButtonStyle}>Pouze deaktivovat</Button></DialogActions>
+                <DialogActions sx={dialogActionsStyle}>
+                    <Button onClick={() => setDeleteDialog({ ...deleteDialog, open: false })} sx={ghostButtonStyle}>Zrušit</Button>
+                    <Button color="error" variant="contained" disabled={deleteConfirmText !== 'SMAZAT' || isSaving} onClick={() => void executeDeleteOrDeactivate('hard_delete')} sx={dangerButtonStyle}>
+                        {isSaving ? 'Zpracovávám...' : 'Trvale smazat'}
+                    </Button>
+                    <Button color="success" variant="contained" disabled={isSaving} onClick={() => void executeDeleteOrDeactivate('deactivate')} sx={neutralButtonStyle}>
+                        {isSaving ? 'Zpracovávám...' : 'Pouze deaktivovat'}
+                    </Button>
+                </DialogActions>
             </Dialog>
 
             <Dialog open={isCatDialogOpen} onClose={() => setIsCatDialogOpen(false)} fullWidth maxWidth="xs" slotProps={modernDialogProps}>
@@ -344,7 +378,12 @@ const PositionsSettingsPage: React.FC = () => {
                     <Box sx={{ mt: 1 }}><Typography variant="caption" sx={{ color: '#64748b', ml: 1, mb: 0.5, display: 'block' }}>Barva kategorie</Typography><input type="color" value={catForm.color} onChange={e => setCatForm({ ...catForm, color: e.target.value })} style={{ width: '100%', height: '48px', border: '1px solid #e2e8f0', borderRadius: '8px', cursor: 'pointer', padding: '2px', backgroundColor: '#ffffff' }} /></Box>
                     <Stack direction="row" spacing={2} sx={{ mt: 1 }}><TextField label="Pořadí" type="number" value={catForm.order} onChange={e => setCatForm({ ...catForm, order: Number(e.target.value) })} sx={modernInputStyle} /><FormControlLabel control={<Switch checked={catForm.active} onChange={e => setCatForm({ ...catForm, active: e.target.checked })} />} label={<Typography fontWeight="500" color="#334155">Aktivní</Typography>} /></Stack>
                 </DialogContent>
-                <DialogActions sx={dialogActionsStyle}><Button onClick={() => setIsCatDialogOpen(false)} sx={ghostButtonStyle}>Zrušit</Button><Button variant="contained" onClick={() => void handleSaveCategory()} sx={primaryButtonStyle}>Uložit</Button></DialogActions>
+                <DialogActions sx={dialogActionsStyle}>
+                    <Button onClick={() => setIsCatDialogOpen(false)} sx={ghostButtonStyle}>Zrušit</Button>
+                    <Button variant="contained" onClick={() => void handleSaveCategory()} disabled={isSaving} sx={primaryButtonStyle}>
+                        {isSaving ? 'Ukládám...' : 'Uložit'}
+                    </Button>
+                </DialogActions>
             </Dialog>
 
             <Dialog open={isStatDialogOpen} onClose={() => setIsStatDialogOpen(false)} fullWidth maxWidth="sm" slotProps={modernDialogProps}>
@@ -357,7 +396,12 @@ const PositionsSettingsPage: React.FC = () => {
                     <FormControlLabel control={<Switch checked={statForm.useDefaultSplitTime} onChange={e => setStatForm({ ...statForm, useDefaultSplitTime: e.target.checked })} />} label={<Typography variant="body2" sx={{ fontWeight: 'bold', color: '#3b82f6' }}>Dle otevírací doby</Typography>} />
                     {!statForm.useDefaultSplitTime && (<TextField label="Odpolední směna začíná od" type="time" fullWidth size="small" value={statForm.afternoonStartTime} onChange={e => setStatForm({ ...statForm, afternoonStartTime: e.target.value })} slotProps={{ inputLabel: { shrink: true } }} sx={{ mt: 1, ...modernInputStyle }} />)}
                 </DialogContent>
-                <DialogActions sx={dialogActionsStyle}><Button onClick={() => setIsStatDialogOpen(false)} sx={ghostButtonStyle}>Zrušit</Button><Button variant="contained" onClick={() => void handleSaveStation()} sx={primaryButtonStyle}>Uložit</Button></DialogActions>
+                <DialogActions sx={dialogActionsStyle}>
+                    <Button onClick={() => setIsStatDialogOpen(false)} sx={ghostButtonStyle}>Zrušit</Button>
+                    <Button variant="contained" onClick={() => void handleSaveStation()} disabled={isSaving} sx={primaryButtonStyle}>
+                        {isSaving ? 'Ukládám...' : 'Uložit'}
+                    </Button>
+                </DialogActions>
             </Dialog>
 
             <Dialog open={isTmplDialogOpen} onClose={() => setIsTmplDialogOpen(false)} fullWidth maxWidth="sm" slotProps={modernDialogProps}>
@@ -376,7 +420,12 @@ const PositionsSettingsPage: React.FC = () => {
                         </Box>
                     )}
                 </DialogContent>
-                <DialogActions sx={dialogActionsStyle}><Button onClick={() => setIsTmplDialogOpen(false)} sx={ghostButtonStyle}>Zrušit</Button><Button variant="contained" onClick={() => void handleSaveTemplate()} sx={primaryButtonStyle}>Uložit</Button></DialogActions>
+                <DialogActions sx={dialogActionsStyle}>
+                    <Button onClick={() => setIsTmplDialogOpen(false)} sx={ghostButtonStyle}>Zrušit</Button>
+                    <Button variant="contained" onClick={() => void handleSaveTemplate()} disabled={isSaving} sx={primaryButtonStyle}>
+                        {isSaving ? 'Ukládám...' : 'Uložit'}
+                    </Button>
+                </DialogActions>
             </Dialog>
 
             <Dialog open={isHoursDialogOpen} onClose={() => setIsHoursDialogOpen(false)} fullWidth maxWidth="sm" slotProps={modernDialogProps}>
@@ -385,19 +434,34 @@ const PositionsSettingsPage: React.FC = () => {
                     <Box><Typography fontWeight="bold" color="#3b82f6" mb={2}>Týden (Po-Pá)</Typography><Stack direction="row" spacing={2} mb={3}><TextField label="Dopo od" type="time" size="small" fullWidth value={hoursForm.weekDopoStart?.substring(0,5) || ''} onChange={e => setHoursForm({...hoursForm, weekDopoStart: formatTimeForServer(e.target.value) || ''})} slotProps={{ inputLabel: { shrink: true } }} sx={modernInputStyle} /><TextField label="Dopo do" type="time" size="small" fullWidth value={hoursForm.weekDopoEnd?.substring(0,5) || ''} onChange={e => setHoursForm({...hoursForm, weekDopoEnd: formatTimeForServer(e.target.value) || ''})} slotProps={{ inputLabel: { shrink: true } }} sx={modernInputStyle} /></Stack><Stack direction="row" spacing={2}><TextField label="Odpo od" type="time" size="small" fullWidth value={hoursForm.weekOdpoStart?.substring(0,5) || ''} onChange={e => setHoursForm({...hoursForm, weekOdpoStart: formatTimeForServer(e.target.value) || ''})} slotProps={{ inputLabel: { shrink: true } }} sx={modernInputStyle} /><TextField label="Odpo do" type="time" size="small" fullWidth value={hoursForm.weekOdpoEnd?.substring(0,5) || ''} onChange={e => setHoursForm({...hoursForm, weekOdpoEnd: formatTimeForServer(e.target.value) || ''})} slotProps={{ inputLabel: { shrink: true } }} sx={modernInputStyle} /></Stack></Box>
                     <Divider sx={{ ...lightDividerStyle, my: 1 }} /><Box><Stack direction="row" justifyContent="space-between" alignItems="center" mb={2}><Typography fontWeight="bold" color="#3b82f6">Víkend</Typography><FormControlLabel control={<Switch size="small" checked={hoursForm.weekendSame} onChange={e => setHoursForm({...hoursForm, weekendSame: e.target.checked})} />} label={<Typography fontWeight="500">Stejné jako v týdnu</Typography>} /></Stack><Box sx={{ opacity: hoursForm.weekendSame ? 0.4 : 1, pointerEvents: hoursForm.weekendSame ? 'none' : 'auto' }}><Stack direction="row" spacing={2} mb={3}><TextField label="Dopo od" type="time" size="small" fullWidth value={hoursForm.weekendSame ? (hoursForm.weekDopoStart?.substring(0,5) || '') : (hoursForm.weekendDopoStart?.substring(0,5) || '')} onChange={e => setHoursForm({...hoursForm, weekendDopoStart: formatTimeForServer(e.target.value) || ''})} slotProps={{ inputLabel: { shrink: true } }} sx={modernInputStyle} /><TextField label="Dopo do" type="time" size="small" fullWidth value={hoursForm.weekendSame ? (hoursForm.weekDopoEnd?.substring(0,5) || '') : (hoursForm.weekendDopoEnd?.substring(0,5) || '')} onChange={e => setHoursForm({...hoursForm, weekendDopoEnd: formatTimeForServer(e.target.value) || ''})} slotProps={{ inputLabel: { shrink: true } }} sx={modernInputStyle} /></Stack><Stack direction="row" spacing={2}><TextField label="Odpo od" type="time" size="small" fullWidth value={hoursForm.weekendSame ? (hoursForm.weekOdpoStart?.substring(0,5) || '') : (hoursForm.weekendOdpoStart?.substring(0,5) || '')} onChange={e => setHoursForm({...hoursForm, weekendOdpoStart: formatTimeForServer(e.target.value) || ''})} slotProps={{ inputLabel: { shrink: true } }} sx={modernInputStyle} /><TextField label="Odpo do" type="time" size="small" fullWidth value={hoursForm.weekendSame ? (hoursForm.weekOdpoEnd?.substring(0,5) || '') : (hoursForm.weekendOdpoEnd?.substring(0,5) || '')} onChange={e => setHoursForm({...hoursForm, weekendOdpoEnd: formatTimeForServer(e.target.value) || ''})} slotProps={{ inputLabel: { shrink: true } }} sx={modernInputStyle} /></Stack></Box></Box>
                 </DialogContent>
-                <DialogActions sx={dialogActionsStyle}><Button onClick={() => setIsHoursDialogOpen(false)} sx={ghostButtonStyle}>Zrušit</Button><Button variant="contained" onClick={() => void handleSaveHours()} sx={primaryButtonStyle}>Uložit</Button></DialogActions>
+                <DialogActions sx={dialogActionsStyle}>
+                    <Button onClick={() => setIsHoursDialogOpen(false)} sx={ghostButtonStyle}>Zrušit</Button>
+                    <Button variant="contained" onClick={() => void handleSaveHours()} disabled={isSaving} sx={primaryButtonStyle}>
+                        {isSaving ? 'Ukládám...' : 'Uložit'}
+                    </Button>
+                </DialogActions>
             </Dialog>
 
             <Dialog open={isPauseDialogOpen} onClose={() => setIsPauseDialogOpen(false)} fullWidth maxWidth="xs" slotProps={modernDialogProps}>
                 <DialogTitle sx={dialogTitleStyle}>Pravidla pauz</DialogTitle>
                 <DialogContent sx={dialogContentStyle}><TextField label="Pauza po (hod)" type="number" fullWidth value={pauseForm.triggerHours} onChange={e => setPauseForm({...pauseForm, triggerHours: Number(e.target.value)})} sx={modernInputStyle} /><TextField label="Délka (min)" type="number" fullWidth value={pauseForm.pauseMinutes} onChange={e => setPauseForm({...pauseForm, pauseMinutes: Number(e.target.value)})} sx={modernInputStyle} /></DialogContent>
-                <DialogActions sx={dialogActionsStyle}><Button onClick={() => setIsPauseDialogOpen(false)} sx={ghostButtonStyle}>Zrušit</Button><Button variant="contained" onClick={() => void handleSavePause()} sx={primaryButtonStyle}>Uložit</Button></DialogActions>
+                <DialogActions sx={dialogActionsStyle}>
+                    <Button onClick={() => setIsPauseDialogOpen(false)} sx={ghostButtonStyle}>Zrušit</Button>
+                    <Button variant="contained" onClick={() => void handleSavePause()} disabled={isSaving} sx={primaryButtonStyle}>
+                        {isSaving ? 'Ukládám...' : 'Uložit'}
+                    </Button>
+                </DialogActions>
             </Dialog>
 
             <Dialog open={isSeasonDialogOpen} onClose={() => setIsSeasonDialogOpen(false)} fullWidth maxWidth="sm" slotProps={modernDialogProps}>
                 <DialogTitle sx={dialogTitleStyle}>{seasonForm.id ? 'Úprava sezóny' : 'Nová sezóna'}</DialogTitle>
                 <DialogContent sx={dialogContentStyle}><Stack direction="row" spacing={2} mb={1}><TextField label="Název" fullWidth value={seasonForm.name} onChange={e => setSeasonForm({...seasonForm, name: e.target.value})} sx={modernInputStyle} /><FormControlLabel control={<Switch checked={seasonForm.isActive !== false} onChange={e => setSeasonForm({ ...seasonForm, isActive: e.target.checked })} />} label={<Typography fontWeight="500">Aktivní</Typography>} /></Stack><Stack direction="row" spacing={2} mb={1}><TextField label="Od" type="date" fullWidth value={seasonForm.startDate} onChange={e => setSeasonForm({...seasonForm, startDate: e.target.value})} slotProps={{ inputLabel: { shrink: true } }} sx={modernInputStyle} /><TextField label="Do" type="date" fullWidth value={seasonForm.endDate} onChange={e => setSeasonForm({...seasonForm, endDate: e.target.value})} slotProps={{ inputLabel: { shrink: true } }} sx={modernInputStyle} /></Stack><Box sx={{ mt: 1, mb: 1 }}><Typography sx={sectionTitleStyle}>Provozní doba</Typography><Divider sx={lightDividerStyle} /></Box><Stack direction="row" spacing={2} mb={1}><TextField label="Dopo od" type="time" fullWidth size="small" value={seasonForm.dopoStart?.substring(0,5) || ''} onChange={e => setSeasonForm({...seasonForm, dopoStart: formatTimeForServer(e.target.value) || ''})} slotProps={{ inputLabel: { shrink: true } }} sx={modernInputStyle} /><TextField label="Dopo do" type="time" fullWidth size="small" value={seasonForm.dopoEnd?.substring(0,5) || ''} onChange={e => setSeasonForm({...seasonForm, dopoEnd: formatTimeForServer(e.target.value) || ''})} slotProps={{ inputLabel: { shrink: true } }} sx={modernInputStyle} /></Stack><Stack direction="row" spacing={2}><TextField label="Odpo od" type="time" fullWidth size="small" value={seasonForm.odpoStart?.substring(0,5) || ''} onChange={e => setSeasonForm({...seasonForm, odpoStart: formatTimeForServer(e.target.value) || ''})} slotProps={{ inputLabel: { shrink: true } }} sx={modernInputStyle} /><TextField label="Odpo do" type="time" fullWidth size="small" value={seasonForm.odpoEnd?.substring(0,5) || ''} onChange={e => setSeasonForm({...seasonForm, odpoEnd: formatTimeForServer(e.target.value) || ''})} slotProps={{ inputLabel: { shrink: true } }} sx={modernInputStyle} /></Stack></DialogContent>
-                <DialogActions sx={dialogActionsStyle}><Button onClick={() => setIsSeasonDialogOpen(false)} sx={ghostButtonStyle}>Zrušit</Button><Button variant="contained" onClick={() => void handleSaveSeason()} sx={primaryButtonStyle}>Uložit</Button></DialogActions>
+                <DialogActions sx={dialogActionsStyle}>
+                    <Button onClick={() => setIsSeasonDialogOpen(false)} sx={ghostButtonStyle}>Zrušit</Button>
+                    <Button variant="contained" onClick={() => void handleSaveSeason()} disabled={isSaving} sx={primaryButtonStyle}>
+                        {isSaving ? 'Ukládám...' : 'Uložit'}
+                    </Button>
+                </DialogActions>
             </Dialog>
         </Box>
     );

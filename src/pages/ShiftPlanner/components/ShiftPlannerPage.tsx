@@ -1,3 +1,5 @@
+// src/pages/ShiftPlanner/ShiftPlannerPage.tsx
+
 import React from 'react';
 import {
     Box, Typography, CircularProgress, Button,
@@ -23,8 +25,6 @@ import AutoPlanModal from '../modals/AutoPlanModal';
 
 const ShiftPlannerPage: React.FC = () => {
     const navigate = useNavigate();
-
-    // Logika zůstává oddělena v hooku
     const { state, actions } = useShiftPlannerLogic();
 
     const {
@@ -80,7 +80,7 @@ const ShiftPlannerPage: React.FC = () => {
                     {/* Skupina A: Zpět + Nadpis */}
                     <Box sx={plannerStyles.headerTitleGroup}>
                         <IconButton onClick={() => navigate('/dashboard/shifts')} sx={plannerStyles.backButton}>
-                            <ArrowBack sx={{ color: '#475569', fontSize: 24 }} />
+                            <ArrowBack sx={{ color: '#475569', fontSize: 20 }} />
                         </IconButton>
                         <Box sx={plannerStyles.headerTextContainer}>
                             <Typography sx={plannerStyles.headerTitle}>Směnář</Typography>
@@ -89,7 +89,7 @@ const ShiftPlannerPage: React.FC = () => {
 
                     {/* Skupina B: AKČNÍ LIŠTA */}
                     {isManagerial && (
-                        <Box sx={{ display: 'flex', gap: 1 }}>
+                        <Box sx={{ display: 'flex', gap: { xs: 0.5, md: 1 } }}>
                             <Button onClick={() => setIsGenerateModalOpen(true)} variant="contained" sx={plannerStyles.buttons.primary}>Generovat</Button>
                             <Button onClick={() => setIsCopyModalOpen(true)} variant="contained" sx={plannerStyles.buttons.primary}>Kopírovat</Button>
                             <Button onClick={() => setIsClearModalOpen(true)} variant="contained" sx={plannerStyles.buttons.danger}>Vyčistit</Button>
@@ -109,7 +109,7 @@ const ShiftPlannerPage: React.FC = () => {
 
                     {/* Skupina D: DROPDOWN FILTR */}
                     <FormControl size="small" sx={plannerStyles.dropdownControl}>
-                        <InputLabel>Hlavní typ</InputLabel>
+                        <InputLabel sx={{ fontSize: { xs: '0.8rem', md: '0.9rem' } }}>Hlavní typ</InputLabel>
                         <Select value={selectedCategory} label="Hlavní typ" onChange={handleCategoryChange}>
                             <MenuItem value="all">Všechny typy</MenuItem>
                             {activeHierarchy?.categories.map((cat) => (
@@ -120,15 +120,20 @@ const ShiftPlannerPage: React.FC = () => {
 
                     <Box sx={{ flexGrow: 1 }} />
 
-                    {/* Skupina E: VÝBĚR DATA */}
+                    {/* Skupina E: VÝBĚR DATA (Opravená responzivita) */}
                     <Box sx={plannerStyles.dateNavigator}>
                         <IconButton onClick={handlePrevWeek} size="small" sx={{ color: '#64748b' }}><ArrowBackIos sx={{ fontSize: 12, ml: 0.5 }} /></IconButton>
-                        <Box sx={{ textAlign: 'center', minWidth: 160 }}>
-                            <Typography variant="body2" sx={{ fontWeight: 'bold', color: '#1e293b', fontSize: '0.9rem' }}>
+
+                        {/* OPRAVA: Odstraněna tvrdá šířka 160, přidány responzivní šířky a písmo */}
+                        <Box sx={{ textAlign: 'center', minWidth: { xs: 110, md: 130, lg: 150 } }}>
+                            <Typography variant="body2" sx={{ fontWeight: 'bold', color: '#1e293b', fontSize: { xs: '0.8rem', md: '0.85rem', lg: '0.95rem' } }}>
                                 {new Date(currentWeekStart).toLocaleDateString('cs-CZ', { month: 'long', year: 'numeric' })}
                             </Typography>
-                            <Typography sx={{ fontSize: '0.7rem', color: '#64748b' }}>{currentWeekStart} — {endDate}</Typography>
+                            <Typography sx={{ fontSize: { xs: '0.65rem', md: '0.7rem' }, color: '#64748b' }}>
+                                {currentWeekStart} — {endDate}
+                            </Typography>
                         </Box>
+
                         <IconButton onClick={handleNextWeek} size="small" sx={{ color: '#64748b' }}><ArrowForwardIos sx={{ fontSize: 12 }} /></IconButton>
                     </Box>
                 </Paper>
@@ -167,7 +172,6 @@ const ShiftPlannerPage: React.FC = () => {
                         <CopyWeekModal open={isCopyModalOpen} onClose={() => setIsCopyModalOpen(false)} onConfirm={handleCopyConfirm} currentWeekStart={currentWeekStart} />
                         <AutoPlanModal open={isAutoPlanModalOpen} onClose={() => setIsAutoPlanModalOpen(false)} onConfirm={handleAutoPlanConfirm} viewMode={viewMode} selectedDate={selectedDate} />
 
-                        {/* MUI v6 OPRAVA: PaperProps nahrazeno slotProps */}
                         <Dialog open={isClearModalOpen} onClose={() => setIsClearModalOpen(false)} maxWidth="xs" fullWidth slotProps={{ paper: { sx: { borderRadius: '24px', p: 1 } } }}>
                             <DialogTitle sx={{ fontWeight: 'bold', color: '#ef4444' }}>Vyčištění týdne</DialogTitle>
                             <DialogContent>

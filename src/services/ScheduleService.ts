@@ -22,7 +22,7 @@ export const ScheduleService = {
 
     getAvailableUsers: async (startDate: string, endDate: string): Promise<PlannerUser[]> => {
         const response = await apiClient.get('/schedule/available-users', {
-            params: { startDate, endDate, size: 100 }
+            params: { startDate, endDate, size: 5000 }
         });
         return response.data.content || response.data;
     },
